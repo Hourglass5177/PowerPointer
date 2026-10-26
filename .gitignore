@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+output/
+.protocol/
+.playwright-cli/
+*.log
+local-settings.json
