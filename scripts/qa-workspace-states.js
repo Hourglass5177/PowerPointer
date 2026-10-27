@@ -1,0 +1,26 @@
+async page=>{
+await page.unrouteAll({behavior:'wait'});const check=(v,m)=>{if(!v)throw Error(m)},checks=[];
+await page.setViewportSize({width:1440,height:900});
+const courses=await(await page.request.get('http://127.0.0.1:4320/api/courses')).json();const docs=await(await page.request.get('http://127.0.0.1:4320/api/documents')).json();const cid=await page.evaluate(()=>localStorage.getItem('pointer-course'));const base=courses.find(c=>c.id===cid);const doc=docs.find(d=>d.id===base.documentIds[0]);
+let mode='building',made=[];
+const source={id:'S1',documentId:doc.id,documentName:doc.name,page:2,text:'差商与导数'};
+const revision=()=>({id:'ui-state-revision',courseId:cid,documentIds:base.documentIds,state:mode==='summary'||mode==='update-building'?'building':mode==='update-paused'?'paused':mode==='stale'?'completed':mode,total:5,pages:Array.from({length:mode==='building'||mode==='update-building'?2:5},(_,i)=>({documentId:doc.id,page:i+1,state:mode==='partial'&&i===4?'failed':'completed',summary:'页面重点：差商的极限是导数。[第 2 页](source:S1)',sources:[source],...(mode==='partial'&&i===4?{error:'受控失败：请求中断'}:{})})),chapters:mode==='completed'||mode==='stale'?[{documentId:doc.id,summary:'章节摘要：变化率与导数。[第 2 页](source:S1)'}]:[],summary:mode==='completed'||mode==='stale'?'## 变化率与导数\n先理解差商，再通过极限定义导数。[第 2 页](source:S1)':'',createdAt:new Date().toISOString(),settings:{}});
+const fixtureCourse=()=>({...base,name:mode==='long'?'一门包含很长课程名称用于检查窄屏换行和菜单边界的课程名称'.repeat(3):base.name,knowledgeRevisionId:mode.startsWith('update-')?'ui-previous-revision':'ui-state-revision',knowledgeStale:mode==='stale'||mode.startsWith('update-'),...(mode==='offline'?{root:'Z:/离线课程',offline:'目录不可用'}:{}),...(mode==='sync'?{root:'E:/示例课程',scanId:'ui-scan',files:[],changes:[{type:'added',path:'新增章节名称'.repeat(20)+'.pdf',hash:'test',size:100}]}:{})});
+const fixtureCourses=()=>courses.map(c=>c.id===cid?fixtureCourse():c);
+await page.route('**/api/courses',route=>route.request().method()==='GET'?route.fulfill({json:fixtureCourses()}):route.continue());
+await page.route('**/api/reading/events',route=>route.fulfill({contentType:'text/event-stream',body:'data: '+JSON.stringify({sessions:[],turns:[],courses:fixtureCourses(),knowledge:[],cleanup:[]})+'\n\n'}));
+await page.route('**/api/courses/'+cid+'/knowledge',route=>route.request().method()==='GET'?route.fulfill({json:['offline','sync','long','empty'].includes(mode)?[]:mode.startsWith('update-')?[{...revision(),id:'ui-previous-revision',state:'completed',summary:'上次生成的课程总结，更新时仍可阅读。'},revision()]:[revision()]}):(made.push(route.request().url()),route.fulfill({json:{}})));
+await page.route('**/api/knowledge/*/*',route=>{made.push(route.request().url());return route.fulfill({json:{}})});
+const nav=async(name)=>{if(!await page.getByRole('navigation',{name:'工作区',exact:true}).isVisible())await page.getByRole('button',{name:'切换导航'}).click();await page.getByRole('navigation',{name:'工作区',exact:true}).getByRole('button',{name,exact:true}).click();};
+for(const [state,status,action] of [['building','正在读取 2/5 页','暂停'],['summary','正在整理章节','暂停'],['paused','已暂停 · 已完成 5/5 页','继续'],['partial','成功 4 页 · 失败 1 页','重试失败页'],['failed','成功 5 页 · 失败 0 页','继续'],['completed','已完成',''],['stale','待更新','更新'],['update-building','正在读取 2/5 页','暂停'],['update-paused','已暂停 · 已完成 5/5 页','继续']]){
+ mode=state;await page.reload();await nav('总览');await page.getByRole('status').filter({hasText:status}).waitFor();if(action)await page.getByRole('button',{name:action,exact:true}).waitFor();await page.screenshot({path:'output/playwright/workspace-state-'+state+'.png'});
+ check(await page.locator('.overview-page button.primary:visible').count()===(action?1:0),'single action '+state);
+ if(action){await page.getByRole('button',{name:action,exact:true}).click();await page.waitForFunction(()=>document.querySelector('.overview-page')?.getAttribute('aria-busy')!=='true');}
+ if(state==='completed'){for(const tab of ['章节','逐页','笔记','总览']){await page.locator('.view-tabs').getByRole('button',{name:tab,exact:true}).click();await page.getByRole('region',{name:tab,exact:true}).waitFor();}await page.getByRole('button',{name:'查看第 2 页来源',exact:true}).click();if(await page.getByRole('button',{name:/在课件中查看/}).isVisible())await page.getByRole('button',{name:/在课件中查看/}).click();await page.getByRole('textbox',{name:'页码',exact:true}).waitFor();check(await page.getByRole('textbox',{name:'页码',exact:true}).inputValue()==='2','overview source navigation');}
+ if(state.startsWith('update-'))check((await page.locator('.overview-results').innerText()).includes('上次生成的课程总结'),'previous summary retained');checks.push(state);
+}
+for(const state of ['offline','sync','long']){mode=state;await page.reload();await nav(state==='long'?'总览':'资料');await page.setViewportSize({width:520,height:900});await page.screenshot({path:'output/playwright/workspace-'+state+'-520.png'});check(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)),state+' no overflow');const text=await page.locator('.workspace-page').innerText();if(state==='offline')check(text.includes('目录不可用'),'offline notice');if(state==='sync')check(text.includes('项变更待确认'),'pending sync');checks.push(state);await page.setViewportSize({width:1440,height:900});}
+await page.unrouteAll({behavior:'wait'});await page.reload();return {checks,interceptedActions:made.length};
+}
+
+
