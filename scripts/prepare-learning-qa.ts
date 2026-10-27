@@ -1,0 +1,32 @@
+import { DatabaseSync } from "node:sqlite";
+import { mkdirSync, copyFileSync, existsSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { Store } from "../server/store.ts";
+import type { Document, Turn } from "../shared/types.ts";
+const target = path.resolve("output/improvement-20261022/qa-data");
+if (existsSync(target)) throw Error("QA directory already exists");
+mkdirSync(path.join(target, "pdfs"), { recursive: true });
+mkdirSync(path.join(target, "attachments"), { recursive: true });
+const source = new DatabaseSync("data/library.sqlite", { readOnly: true });
+const records = <T,>(kind: string): T[] => (source.prepare("SELECT body FROM records WHERE kind=?").all(kind) as { body: string }[]).map(r => JSON.parse(r.body));
+const documents = records<Document>("document");
+const docs = [documents.find(d => /02.*DFA/i.test(d.name)), documents.find(d => /03.*NFA/i.test(d.name))].filter((d): d is Document => !!d);
+if (docs.length !== 2) throw Error("Expected real lecture decks missing");
+const store = new Store(target);
+for (const doc of docs) {
+  copyFileSync(path.join("data/pdfs", doc.id + ".pdf"), path.join(target, "pdfs", doc.id + ".pdf"));
+  store.put("document", { ...doc, page: doc === docs[0] ? 12 : 3, zoom: 0, fitMode: "page", hiddenRecent: false, indexStatus: "ready" });
+  for (const p of source.prepare("SELECT page,text FROM pages WHERE doc=?").all(doc.id) as { page: number; text: string }[]) store.page(doc.id, p.page, p.text);
+}
+const now = new Date().toISOString(), courseId = randomUUID(), conversationId = randomUUID();
+store.put("course", { id: courseId, name: "计算理论 · 界面检查", documentIds: docs.map(d => d.id), selectedDocumentIds: docs.map(d => d.id), files: [], changes: [], createdAt: now, updatedAt: now, groups: [{ id: "finite", name: "有限自动机", documentIds: docs.map(d => d.id) }], displayNames: { [docs[0].id]: "确定性有限自动机", [docs[1].id]: "非确定性有限自动机" }, readingPosition: { documentId: docs[0].id, page: 12, updatedAt: now } });
+store.put("conversation", { id: conversationId, documentId: docs[0].id, courseId, title: "转移函数与陷阱状态", createdAt: now });
+const actual = records<Turn>("turn").find(t => t.snapshot.documentId === docs[0].id && t.state === "completed" && t.answer.length > 300);
+const answer = actual?.answer || "确定性有限自动机在每个状态读到一个输入符号时，都有唯一确定的下一状态。\n\n如果图上没有画出某条转移，要看课件是否省略了陷阱状态。补全转移函数时，可以把缺失的边连到陷阱状态。\n\n### 从定义看问题\n\n对任意 $q\\in Q$ 和 $a\\in\\Sigma$，转移函数 $\\delta(q,a)$ 都应有一个结果。\n\n$$\\widehat{\\delta}(q_0,a_1a_2\\cdots a_n)=\\delta(\\delta(\\cdots\\delta(q_0,a_1),a_2)\\cdots,a_n)$$\n\n1. 先识别当前状态。\n2. 找到输入符号对应的边。\n3. 移动到唯一的下一状态。\n4. 全部输入处理完后，再判断是否在接受状态。";
+const sourceRef = { id: "qa-dfa-page", documentId: docs[0].id, documentName: docs[0].name, page: 12, text: "用于界面检查的来源记录" };
+store.put("turn", { id: randomUUID(), conversationId, question: "确定性为什么要求每个输入都有转移？", answer, state: "completed", createdAt: now, snapshot: { documentId: docs[0].id, documentIds: docs.map(d => d.id), courseId, conversationId, page: 12, rotation: 0, scope: "full", extraPages: [], selectedText: "", images: [], sources: [sourceRef] } });
+store.put("note", { id: randomUUID(), courseId, documentId: docs[0].id, title: "确定性与转移函数", text: "先问每个符号的下一状态是否唯一，再问输入结束后是否接受。\n\n$$\\delta:Q\\times\\Sigma\\rightarrow Q$$", sources: [sourceRef], anchor: { id: randomUUID(), kind: "text", documentId: docs[0].id, documentName: docs[0].name, page: 12, rotation: 0, text: "转移函数的定义" }, createdAt: now, updatedAt: now, version: 1 });
+store.close(); source.close();
+writeFileSync("output/improvement-20261022/qa-fixture.json", JSON.stringify({ courseId, conversationId, documents: docs.map(d => ({ id: d.id, name: d.name })) }, null, 2));
+console.log(JSON.stringify({ target, courseId, conversationId, documents: docs.map(d => d.name) }));

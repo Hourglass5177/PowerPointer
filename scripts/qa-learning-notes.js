@@ -1,0 +1,36 @@
+async page => {
+  const check = (value, message) => { if (!value) throw Error(message); };
+  const checks = [];
+  await page.getByRole('textbox', { name: '向课件提问' }).fill('保留这条尚未发送的提问');
+  const transcript = page.getByLabel('对话记录', { exact: true });
+  await transcript.evaluate(el => { window.qaTranscript = el; el.scrollTop = 160; window.qaScroll = el.scrollTop; });
+  await page.getByRole('button', { name: '存为笔记', exact: true }).click();
+  await page.getByRole('textbox', { name: '笔记正文', exact: true }).waitFor();
+  check((await page.getByRole('textbox', { name: '笔记正文' }).inputValue()).includes('转移'), 'Saved full answer');
+  await page.getByRole('textbox', { name: '笔记标题' }).fill('转移函数 · 我的理解');
+  await page.getByRole('textbox', { name: '笔记正文' }).fill('## 我的理解\n\n每次输入只决定一个状态。\n\n$\\delta(q,a)$ 是下一状态。');
+  await page.waitForFunction(() => document.querySelector('.note-save-status')?.textContent === '已保存');
+  await page.getByRole('button', { name: '预览', exact: true }).click();
+  check(await page.locator('.note-preview .katex').count() > 0, 'Note formula preview');
+  await page.screenshot({ path: 'output/playwright/learning-note-1600.png' });
+  await page.getByLabel('阅读侧栏', { exact: true }).getByRole('button', { name: '对话', exact: true }).click();
+  check(await page.evaluate(() => document.querySelector('[aria-label="对话记录"]') === window.qaTranscript), 'Chat DOM preserved');
+  check(await page.evaluate(() => document.querySelector('[aria-label="对话记录"]').scrollTop === window.qaScroll), 'Chat scroll preserved');
+  check(await page.getByRole('textbox', { name: '向课件提问' }).inputValue() === '保留这条尚未发送的提问', 'Draft preserved');
+  checks.push('answer note/autosave/formula preview/chat DOM and draft');
+  await page.getByRole('button', { name: '存为笔记', exact: true }).click();
+  check(await page.getByRole('textbox', { name: '笔记标题' }).inputValue() === '转移函数 · 我的理解', 'Repeat save deduplicates');
+  await page.getByRole('button', { name: '删除笔记', exact: true }).click();
+  await page.getByRole('button', { name: '撤销', exact: true }).click();
+  await page.getByRole('textbox', { name: '笔记标题' }).waitFor();
+  check(await page.getByRole('textbox', { name: '笔记标题' }).inputValue() === '转移函数 · 我的理解', 'Undo preserved');
+  await page.reload();
+  await page.getByLabel('阅读侧栏', { exact: true }).getByRole('button', { name: '笔记', exact: true }).click();
+  await page.locator('.note-list-item').filter({ hasText: '转移函数 · 我的理解' }).click();
+  check((await page.getByRole('textbox', { name: '笔记正文' }).inputValue()).includes('每次输入只决定一个状态'), 'Refresh persisted');
+  checks.push('deduplicate/soft delete/undo/persist');
+  await page.getByRole('textbox', { name: '页码', exact: true }).fill('3');
+  await page.getByRole('textbox', { name: '页码', exact: true }).press('Enter');
+  await page.locator('.textLayer span').first().waitFor();
+  return checks;
+}
