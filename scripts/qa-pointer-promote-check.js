@@ -1,0 +1,4 @@
+async page=>{
+const result=await page.evaluate(async()=>{const all=await(await fetch('/api/conversations')).json();const c=all.find(c=>c.title==='绑定'&&c.seedContextId);if(!c)throw Error('No promoted conversation');const turns=await(await fetch('/api/conversations/'+c.id+'/turns')).json();const reading=await(await fetch('/api/reading')).json();if(!JSON.stringify(turns).includes('银杏树'))throw Error('Frozen history missing');if(reading.sessions.length)throw Error('Closed reading session returned');const s=JSON.parse(localStorage.getItem('pointer-qa'));s.promoted=c.id;localStorage.setItem('pointer-qa',JSON.stringify(s));return{id:c.id,turnCount:turns.length,closedActiveAbsent:!reading.turns.some(t=>t.id===s.closedActive.turnId)};});
+await page.getByRole('button',{name:'课程与资料',exact:true}).click();await page.getByRole('button',{name:'资料库',exact:true}).click();return result;
+}
