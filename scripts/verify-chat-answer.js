@@ -1,0 +1,35 @@
+async page => {
+ const check=(c,m)=>{if(!c)throw Error(m)};
+ await page.getByRole('button',{name:'会话历史',exact:true}).click();await page.getByRole('textbox',{name:'搜索会话标题与消息'}).fill('导数与图形 · 真实验证');
+ await page.locator('.history-select').filter({hasText:'导数与图形 · 真实验证'}).click();
+ await page.getByRole('button',{name:'跳到第 1 页',exact:true}).click();
+ const input=page.getByRole('textbox',{name:'向课件提问'}), scroll=page.getByLabel('对话记录',{exact:true});
+ await page.getByRole('button',{name:'阅读工具与联网'}).click();await page.getByRole('checkbox',{name:/课件工具/}).uncheck();await page.getByRole('checkbox',{name:/网络搜索与网页阅读/}).uncheck();await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'回答选项'}).click();await page.getByRole('button',{name:'详细',exact:true}).click();await page.keyboard.press('Escape');
+ await input.fill('请结合本页，用一个三列表格比较“导数”“导函数”“切线斜率”，再逐步推导 f(x)=x² 在 x=3 的导数，给出一个生活例子和两行 Python 数值检验代码。约500字，引用课件，不执行代码。');
+ const response=page.waitForResponse(r=>r.url().endsWith('/api/turns')&&r.request().method()==='POST');
+ await input.press('Enter');const turn=await(await response).json();check(turn.snapshot.page===1,'send page1');
+ await input.fill('生成期间的新草稿');await page.getByRole('button',{name:'跳到第 2 页',exact:true}).click();
+ await page.getByRole('button',{name:'停止生成',exact:true}).waitFor();await scroll.evaluate(el=>{el.scrollTop=0;el.dispatchEvent(new Event('scroll'));});
+ await page.waitForFunction(id=>{const e=document.querySelector('[data-testid="turn-'+id+'"] .answer');return e?.textContent.length>100},turn.id,{timeout:150000});
+ check(await scroll.evaluate(el=>el.scrollTop)<10,'reading old messages not pulled by stream');
+ check(await input.inputValue()==='生成期间的新草稿','new draft not cleared');
+ await page.getByRole('button',{name:'回到最新',exact:true}).click();
+ await page.getByTestId('turn-'+turn.id).getByRole('button',{name:'重新回答',exact:true}).waitFor({timeout:150000});
+ const article=page.getByTestId('turn-'+turn.id);
+ check(await article.locator('table').count()>0,'table rendered');check(await article.locator('.katex').count()>0,'math rendered');
+ await page.context().grantPermissions(['clipboard-read','clipboard-write']);await article.getByRole('button',{name:'复制回答',exact:true}).click();
+ const answer=await page.evaluate(()=>navigator.clipboard.readText());check(answer.includes('微积分 图形验证.pptx')&&!answer.includes('source:'),'portable answer sources');
+ await article.getByRole('button',{name:'复制代码',exact:true}).click();check((await page.evaluate(()=>navigator.clipboard.readText())).includes('print'),'code copy');
+ const citation=article.getByRole('button',{name:'查看第 1 页来源'}).last();await citation.focus();await page.getByRole('region',{name:'第 1 页来源预览'}).waitFor();await page.screenshot({path:'output/playwright/chat-citation.png'});await citation.press('Enter');
+ check(await page.getByRole('textbox',{name:'页码',exact:true}).inputValue()==='1','citation keyboard jump');
+ await article.getByRole('button',{name:'分步解释',exact:false}).click();check((await input.inputValue()).includes('分步骤'),'followup filled');
+ check(await page.locator('.reply-banner').isVisible(),'reply anchor');await page.getByRole('button',{name:'跳到第 3 页',exact:true}).click();check((await page.locator('.draft-page').innerText()).includes('第 1 页'),'followup keeps page');
+ await article.getByRole('button',{name:'修改问题',exact:true}).click();check(await page.locator('.edit-banner').isVisible(),'edit branch banner');
+ let edited;
+ await page.route('**/api/turns/*/branch',async route=>{edited=route.request().postDataJSON();await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'受控验收：分支接口错误'})});});
+ await input.fill('修改后的问题');await input.press('Enter');await page.getByRole('alert').waitFor();check(edited.question==='修改后的问题'&&edited.options.model,'edit options');await page.unroute('**/api/turns/*/branch');await page.getByRole('button',{name:'关闭提示'}).click();await page.getByRole('button',{name:'取消修改',exact:true}).click();await input.fill('');
+ await page.getByRole('button',{name:'展开问答',exact:true}).click();await article.scrollIntoViewIfNeeded();await page.screenshot({path:'output/playwright/chat-expanded-answer.png'});await page.keyboard.press('Escape');
+ await article.scrollIntoViewIfNeeded();await page.screenshot({path:'output/playwright/chat-final-answer.png'});
+ return {turnId:turn.id,conversationId:turn.conversationId,streamScroll:true,draftPreserved:true,table:true,math:true,copy:true,citation:true,followup:true,edit:true};
+}
