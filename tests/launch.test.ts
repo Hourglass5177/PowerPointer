@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { buildFingerprint, dependencyFingerprint } from "../scripts/build-fingerprint.mjs";
+import { buildEnvironment } from "../scripts/build.mjs";
 
 test("启动指纹覆盖源码、配置和依赖，阅读数据变动不会触发构建", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "lecture-launch-"));
@@ -25,6 +26,25 @@ test("启动指纹覆盖源码、配置和依赖，阅读数据变动不会触�
     write("package-lock.json", "new lock"); assert.notEqual(dependencyFingerprint(root), dependency);
   } finally {
     assert.ok(path.resolve(root).startsWith(path.join(os.tmpdir(), "lecture-launch-")));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("构建改用项目内临时目录，不依赖系统临时目录的删除权限", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "lecture-build-"));
+  try {
+    const env = buildEnvironment(root, {
+      TEMP: "C:\\Windows\\Temp",
+      TMP: "C:\\Windows\\Temp",
+      PATH: "bin",
+    });
+    const local = path.join(root, "node_modules", ".cache", "tmp");
+    assert.equal(env.TEMP, local);
+    assert.equal(env.TMP, local);
+    assert.equal(env.PATH, "bin");
+    assert.ok(statSync(local).isDirectory());
+  } finally {
+    assert.ok(path.resolve(root).startsWith(path.join(os.tmpdir(), "lecture-build-")));
     rmSync(root, { recursive: true, force: true });
   }
 });

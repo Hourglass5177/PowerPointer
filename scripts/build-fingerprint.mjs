@@ -20,7 +20,7 @@ export function buildFingerprint(root) {
     }
   };
   for (const folder of ["src", "shared", "server", "public", "docs/manual"]) walk(folder);
-  for (const name of ["index.html", "tsconfig.json", "vite.config.ts", "scripts/launch.mjs", "scripts/build-fingerprint.mjs", "node_modules/.package-lock.json"]) if (existsSync(path.join(root, name))) files.push(name);
+  for (const name of ["index.html", "tsconfig.json", "vite.config.ts", "scripts/launch.mjs", "scripts/build.mjs", "scripts/build-fingerprint.mjs", "node_modules/.package-lock.json"]) if (existsSync(path.join(root, name))) files.push(name);
   for (const name of files.sort()) hash.update(name.replaceAll("\\", "/")).update(readFileSync(path.join(root, name)));
   return hash.digest("hex");
 }
