@@ -26,7 +26,7 @@ npm start
 
 “设置”打开 AI 连接中心，可管理 Codex 订阅、OpenAI Responses、Anthropic Messages、Gemini，以及兼容 OpenAI 的 DeepSeek、通义千问、OpenRouter、Ollama、LM Studio 和自定义服务。服务地址填写 API 根路径；先获取模型或填写模型 ID，再按服务实际能力确认图像、工具调用和推理支持。
 
-- Codex 自动检测本机 CLI 与已有 ChatGPT 登录，也可在连接设置填写可执行路径。登录和刷新由官方 CLI 处理；额度只显示 App Server 实际返回的数据。订阅连接不会使用 API Key，也不会自动转向其他收费服务。
+- Codex 自动检测本机 CLI 与已有 ChatGPT 登录，也可在连接设置填写 `codex.exe` 或 npm 生成的 `codex.cmd`、`codex.ps1` 路径。登录和刷新由官方 CLI 处理；额度只显示 App Server 实际返回的数据。订阅连接不会使用 API Key，也不会自动转向其他收费服务。
 - API 密钥仅在后端通过 Windows 当前用户 DPAPI 加密后存入本地数据库，不回传明文，不放进浏览器存储或导出文件。本地模型服务可以不填密钥。切换服务是用户的明确选择，应用不会自动备用切换。
 - 问答输入区直接选择助手、模型和资料范围。模型支持搜索、收藏、最近使用和显示名；“快速／深入／批量”可保存自己的模型、助手、思考强度和工具参数。
 - 仅文本模型可以处理文字任务。图像能力未知时不会自动假定支持，需确认能力或选择“仅文本”；扫描页和图表应使用图像模型。推理参数只填写服务实际支持的值：Anthropic 的常规强度使用 adaptive 模式，旧模型固定预算可填 budget:4096；Gemini 强度使用 thinkingLevel，固定预算可填 budget:4096。
