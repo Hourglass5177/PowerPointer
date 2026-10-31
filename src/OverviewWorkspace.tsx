@@ -9,6 +9,7 @@ import { Icon } from "./controls.tsx";
 import { CourseImports } from "./CourseImports.tsx";
 import { requestOpenNote } from "./useNotes.ts";
 import { ModelSelect, selectedModel, ProfileButtons } from "./AIControls.tsx";
+import { defaultEffort, modelEfforts } from "../shared/ai.ts";
 
 export function OverviewWorkspace({ r, windows: w, onCreate }: { r: Reader; windows: ReadingWindows; onCreate: () => void }) {
   const course = r.course;
@@ -69,7 +70,7 @@ export function OverviewWorkspace({ r, windows: w, onCreate }: { r: Reader; wind
         <select aria-label="整理范围" value={scope} disabled={building} onChange={e => setScope(e.target.value)}><option value="current">当前章节</option><option value="selected">所选章节</option><option value="all">全部问答来源</option></select>
         <details className="popover"><summary aria-label="整理设置"><Icon name="settings" size={18} /></summary><div className="popover-panel overview-settings">
           <ProfileButtons ai={r.ai} onChange={value => !building && setSettings(value)} /><label>模型<ModelSelect models={r.models} value={settings} ai={r.ai} onChange={value => !building && setSettings({ ...settings, ...value })} /></label>
-          <label>思考强度<select aria-label="整理思考强度" value={settings.reasoningEffort || model?.defaultReasoningEffort || ""} disabled={building} onChange={e => setSettings({ ...settings, reasoningEffort: e.target.value })}>{model?.supportedReasoningEfforts.map(e => <option key={e.reasoningEffort}>{e.reasoningEffort}</option>)}</select></label>
+          <label>思考强度<select aria-label="整理思考强度" value={settings.reasoningEffort || defaultEffort(model)} disabled={building} onChange={e => setSettings({ ...settings, reasoningEffort: e.target.value })}>{!settings.reasoningEffort && !defaultEffort(model) && <option value="">模型默认</option>}{modelEfforts(model).map(e => <option key={e}>{e}</option>)}</select></label>
           <label>已有结果<select aria-label="缓存使用方式" value={force ? "force" : "reuse"} disabled={building} onChange={e => setForce(e.target.value === "force")}><option value="reuse">复用相同设置的结果</option><option value="force">重新分析</option></select></label>
         </div></details>
         {building ? <button disabled={busy} onClick={() => void perform(() => api(`/knowledge/${active.id}/cancel`, { method: "POST" }))}>暂停整理</button> : <button className="primary" disabled={busy || !targets.length} onClick={() => start()}>{scope === "all" ? "整理全部" : scope === "selected" ? `整理所选章节 (${targets.length})` : "整理本章"}</button>}

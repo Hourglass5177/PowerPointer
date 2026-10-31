@@ -18,8 +18,53 @@ import { ResearchService } from "../server/ai-research.ts";
 import { NotesService } from "../server/notes.ts";
 import { Scheduler } from "../server/scheduler.ts";
 import { ChatService } from "../server/chat.ts";
-import type { AIConnection, ResearchRun, ResearchArtifact } from "../shared/ai.ts";
+import { connectionPresets, defaultEffort, modelEfforts, type AIConnection, type ResearchRun, type ResearchArtifact } from "../shared/ai.ts";
 import type { Document, Turn } from "../shared/types.ts";
+
+test("思考强度：默认值计入可选项，不支持推理时不发送，空白项被忽略", async () => {
+  const model = (values: object) => ({ defaultReasoningEffort: "", supportedReasoningEfforts: [], capabilities: { vision: true, tools: true, reasoning: true as boolean | "unknown" }, ...values });
+  assert.deepEqual(modelEfforts(model({ defaultReasoningEffort: "high" })), ["high"]);
+  assert.deepEqual(modelEfforts(model({ defaultReasoningEffort: "high", supportedReasoningEfforts: [{ reasoningEffort: "low", description: "" }, { reasoningEffort: " ", description: "" }, { reasoningEffort: "high", description: "" }] })), ["low", "high"]);
+  assert.deepEqual(modelEfforts(model({ defaultReasoningEffort: "high", capabilities: { vision: true, tools: true, reasoning: false } })), []);
+  assert.equal(defaultEffort(model({ defaultReasoningEffort: "high", capabilities: { vision: true, tools: true, reasoning: false } })), "");
+  assert.deepEqual(connectionPresets.find(p => p.id === "deepseek")?.reasoningEfforts, ["low", "high", "max"]);
+  const f = fixture();
+  try {
+    const m = f.c.models[0];
+    Object.assign(m, { defaultReasoningEffort: "high", supportedReasoningEfforts: [], capabilities: { vision: true, tools: true, reasoning: true } });
+    f.store.put("aiConnection", f.c);
+    assert.equal((await f.config.resolve({ connectionId: f.c.id, model: "fixture" })).settings.reasoningEffort, "high");
+    await assert.rejects(() => f.config.resolve({ connectionId: f.c.id, model: "fixture", reasoningEffort: "max" }), /不支持此思考强度/);
+    m.capabilities!.reasoning = false; f.store.put("aiConnection", f.c);
+    assert.equal((await f.config.resolve({ connectionId: f.c.id, model: "fixture" })).settings.reasoningEffort, undefined);
+    const saved = await f.config.saveConnection(f.c.id, { ...f.c, hasKey: undefined, models: [{ ...m, defaultReasoningEffort: " high ", supportedReasoningEfforts: [{ reasoningEffort: " low", description: "" }, { reasoningEffort: "", description: "" }] }] });
+    assert.equal(saved.models[0].defaultReasoningEffort, "high");
+    assert.deepEqual(saved.models[0].supportedReasoningEfforts.map(e => e.reasoningEffort), ["low"]);
+  } finally { await f.close(); }
+});
+
+test("兼容接口在工具多轮中回传 reasoning_content，没有时不添加", async () => {
+  const s = await server((body, _req, res) => {
+    if (body.messages.some((m: any) => m.role === "tool")) { chat(res, "完成"); return; }
+    events(res, [
+      { choices: [{ delta: { reasoning_content: "先读" } }] },
+      { choices: [{ delta: { reasoning_content: "第一页" } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: "call-a", type: "function", function: { name: "read", arguments: "{}" } }] } }] },
+      { choices: [{ delta: {}, finish_reason: "tool_calls" }] },
+    ]);
+  });
+  try {
+    const req = { model: "fixture", system: "", effort: "high", tools: [{ name: "read", description: "", inputSchema: {} }], messages: [{ role: "user" as const, text: "问题" }], signal: new AbortController().signal };
+    const first = await invokeProvider(connection(s.url), "", req);
+    await invokeProvider(connection(s.url), "", { ...req, messages: [...req.messages, { role: "assistant", text: first.text, toolCalls: first.toolCalls, providerData: first.providerData }, { role: "tool", text: "资料", toolCallId: "call-a" }] });
+    const wire = s.requests[1].body;
+    assert.equal(wire.reasoning_effort, "high");
+    assert.equal(wire.messages.find((m: any) => m.role === "assistant").reasoning_content, "先读第一页");
+    assert.equal(wire.messages.find((m: any) => m.role === "user").reasoning_content, undefined);
+    await invokeProvider(connection(s.url), "", { ...req, messages: [...req.messages, { role: "assistant", text: "旧回答" }, { role: "tool", text: "资料", toolCallId: "call-b" }] });
+    assert.equal("reasoning_content" in s.requests[2].body.messages.find((m: any) => m.role === "assistant"), false);
+  } finally { await s.close(); }
+});
 
 async function server(handler: (body: any, req: IncomingMessage, res: ServerResponse) => void | Promise<void>) {
   const requests: { body: any; path: string; headers: IncomingMessage["headers"] }[] = [];

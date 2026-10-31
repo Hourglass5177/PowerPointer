@@ -70,7 +70,7 @@ export async function invokeProvider(connection: AIConnection, key: string, req:
   }, []);
   if (protocol === "compatible") {
     route = "/chat/completions";
-    const messages: any[] = [{ role: "system", content: req.system }, ...messagesWithImages.map(m => ({ role: m.role, content: m.images?.length ? [{ type: "text", text: m.text }, ...m.images.map(url => ({ type: "image_url", image_url: { url } }))] : m.text || (m.toolCalls ? null : ""), ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}), ...(m.toolCalls ? { tool_calls: m.toolCalls.map(t => ({ id: t.id, type: "function", function: { name: t.name, arguments: JSON.stringify(t.arguments) } })) } : {}) }))];
+    const messages: any[] = [{ role: "system", content: req.system }, ...messagesWithImages.map(m => ({ role: m.role, content: m.images?.length ? [{ type: "text", text: m.text }, ...m.images.map(url => ({ type: "image_url", image_url: { url } }))] : m.text || (m.toolCalls ? null : ""), ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}), ...(m.providerData?.protocol === protocol ? m.providerData.content[0] : {}), ...(m.toolCalls ? { tool_calls: m.toolCalls.map(t => ({ id: t.id, type: "function", function: { name: t.name, arguments: JSON.stringify(t.arguments) } })) } : {}) }))];
     body = { model: req.model, messages, stream: true, ...(tools.length ? { tools: tools.map(t => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.inputSchema } })) } : {}), ...(req.effort ? { reasoning_effort: req.effort } : {}) };
   } else if (protocol === "openai") {
     route = "/responses";
@@ -111,6 +111,8 @@ export async function invokeProvider(connection: AIConnection, key: string, req:
       if (finish === "stop" || finish === "tool_calls") completed = true;
       else if (finish) throw Error("模型输出未完成或受到内容限制，请缩小任务后重试");
       if (typeof delta?.content === "string") add(delta.content);
+      // Services such as DeepSeek require this back on every later request that carries tools.
+      if (delta?.reasoning_content) { nativeContent[0] ||= { reasoning_content: "" }; nativeContent[0].reasoning_content += delta.reasoning_content; }
       for (const call of delta?.tool_calls || []) {
         const index = String(call.index), prev = calls.get(index) || { id: "", name: "", args: "" };
         prev.id ||= call.id; prev.name += call.function?.name || ""; prev.args += call.function?.arguments || ""; calls.set(index, prev);
