@@ -189,7 +189,7 @@
   padding-top: 14px;
 }
 .reading-question {
-  font-size: 12px;
+  font-size: calc(var(--chat-font-size, 16px) * 0.75);
   line-height: 1.55;
   color: #79675a;
   background: #f6f3f0;
@@ -202,8 +202,11 @@
   overflow: auto;
 }
 .reading-window .answer-v2 {
-  font-size: 16px;
+  font-size: var(--chat-font-size, 16px);
   line-height: 1.72;
+}
+.reading-window .answer-v2 table {
+  font-size: 0.8125em;
 }
 .reading-window .answer-v2 p {
   margin: 8px 0;
@@ -211,7 +214,7 @@
 .reading-window .answer-v2 h1,
 .reading-window .answer-v2 h2,
 .reading-window .answer-v2 h3 {
-  font-size: 15px;
+  font-size: 0.9375em;
 }
 .reading-window .answer-v2 pre,
 .reading-window .answer-v2 table {
@@ -277,7 +280,7 @@
 }
 .reading-composer textarea {
   flex: 1;
-  font-size: 14px;
+  font-size: calc(var(--chat-font-size, 16px) * 0.875);
   line-height: 1.5;
   height: 54px;
   resize: none;
