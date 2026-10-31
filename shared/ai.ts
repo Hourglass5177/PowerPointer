@@ -188,6 +188,12 @@ export const connectionPresets: { id: string; name: string; protocol: AIProtocol
   { id: "lmstudio", name: "LM Studio", protocol: "compatible", baseUrl: "http://127.0.0.1:1234/v1" },
   { id: "custom", name: "自定义服务", protocol: "compatible", baseUrl: "" },
 ];
+// A confirmed reasoning model with no list of its own uses the service's documented efforts.
+export function withPresetEfforts<T extends AIConnection>(connection: T): T {
+  const preset = connectionPresets.find(p => p.id === connection.preset);
+  if (!preset?.reasoningEfforts) return connection;
+  return { ...connection, models: connection.models.map(m => m.capabilities?.reasoning === true && !m.supportedReasoningEfforts.length ? { ...m, supportedReasoningEfforts: preset.reasoningEfforts!.map(reasoningEffort => ({ reasoningEffort, description: "" })), defaultReasoningEffort: m.defaultReasoningEffort || preset.defaultReasoningEffort || "" } : m) };
+}
 export const modelKey = (connectionId: string | undefined, model: string) => `${connectionId || DEFAULT_CONNECTION}::${model}`;
 export const profileLabels = { quick: "快速解释", deep: "深入分析", batch: "批量整理" };
 export function builtinAssistants(): AssistantProfile[] {

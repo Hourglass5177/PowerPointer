@@ -43,6 +43,28 @@ test("思考强度：默认值计入可选项，不支持推理时不发送，�
   } finally { await f.close(); }
 });
 
+test("预设服务的已有模型未填强度时使用官方列表，用户填写和未确认能力不受影响", async () => {
+  const f = fixture();
+  try {
+    const caps = (reasoning: boolean | "unknown") => ({ vision: true, tools: true, reasoning });
+    const model = (id: string, reasoning: boolean | "unknown", defaultReasoningEffort = "", list: string[] = []) => ({ model: id, displayName: id, isDefault: false, defaultReasoningEffort, supportedReasoningEfforts: list.map(reasoningEffort => ({ reasoningEffort, description: "" })), capabilities: caps(reasoning) });
+    const c = { ...connection("http://127.0.0.1:1"), preset: "deepseek", models: [model("blank", true), model("only-default", true, "high"), model("custom", true, "max", ["max"]), model("unknown", "unknown"), model("off", false)] };
+    f.store.put("aiConnection", c);
+    const efforts = async (id: string) => { const m = (await f.config.models(c.id)).find(m => m.model === id)!; return [m.supportedReasoningEfforts.map(e => e.reasoningEffort), m.defaultReasoningEffort]; };
+    assert.deepEqual(await efforts("blank"), [["low", "high", "max"], "high"]);
+    assert.deepEqual(await efforts("only-default"), [["low", "high", "max"], "high"]);
+    assert.deepEqual(await efforts("custom"), [["max"], "max"]);
+    assert.deepEqual(await efforts("unknown"), [[], ""]);
+    assert.deepEqual(await efforts("off"), [[], ""]);
+    assert.equal((await f.config.resolve({ connectionId: c.id, model: "blank", reasoningEffort: "max" })).settings.reasoningEffort, "max");
+    assert.equal((await f.config.resolve({ connectionId: c.id, model: "blank" })).settings.reasoningEffort, "high");
+    assert.deepEqual(f.config.connection(c.id).models[0].supportedReasoningEfforts.map(e => e.reasoningEffort), ["low", "high", "max"]);
+    const plain = { ...c, id: randomUUID(), preset: "custom" };
+    f.store.put("aiConnection", plain);
+    assert.deepEqual((await f.config.models(plain.id)).find(m => m.model === "blank")!.supportedReasoningEfforts, []);
+  } finally { await f.close(); }
+});
+
 test("兼容接口在工具多轮中回传 reasoning_content，没有时不添加", async () => {
   const s = await server((body, _req, res) => {
     if (body.messages.some((m: any) => m.role === "tool")) { chat(res, "完成"); return; }
