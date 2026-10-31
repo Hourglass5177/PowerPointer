@@ -31,7 +31,8 @@
 .ai-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 24px; }
 .ai-center button:not(.ai-connection-nav button):not(.ai-center-tabs button) { font-size: 12px; }
 .ai-center .primary { background: #8e624a; color: #fffdf7; border-color: #8e624a; }
-.ai-center .danger { color: #a55447; }
+.ai-center .danger { background: transparent; color: #a72c20; border-color: #d8aaa2; }
+.ai-center .danger:hover:not(:disabled) { background: #f8e9e5; color: #8c2016; border-color: #a72c20; }
 .ai-text-button { background: transparent; border: 0; color: #89715e; padding: 0; margin: -7px 0 14px; }
 .ai-success { font-size: 12px; color: #617c57; padding: 10px 12px; background: #edf1e7; border-radius: 6px; }
 .ai-codex-status { display: flex; flex-direction: column; gap: 10px; padding: 18px; margin: 12px 0 16px; background: #f3f4eb; border-radius: 10px; }

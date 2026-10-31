@@ -8,6 +8,7 @@ import {
   type Turn,
 } from "../shared/types.ts";
 import { sourceMap, portableAnswer } from "../shared/chat.ts";
+import { defaultEffort, modelEfforts } from "../shared/ai.ts";
 import { RichAnswer } from "./RichAnswer.tsx";
 import { requestPointer, selectedOrBlock } from "./selection.ts";
 import { api, renderUrl } from "./api.ts";
@@ -364,9 +365,7 @@ function Window({
                 <select
                   aria-label="解释窗思考强度"
                   value={
-                    s.settings.reasoningEffort ||
-                    model?.defaultReasoningEffort ||
-                    ""
+                    s.settings.reasoningEffort || defaultEffort(model)
                   }
                   onChange={(e) =>
                     r.guard(() =>
@@ -379,9 +378,12 @@ function Window({
                     )
                   }
                 >
-                  {model?.supportedReasoningEfforts.map((e) => (
-                    <option key={e.reasoningEffort} value={e.reasoningEffort}>
-                      {e.reasoningEffort}
+                  {!s.settings.reasoningEffort && !defaultEffort(model) && (
+                    <option value="">模型默认</option>
+                  )}
+                  {modelEfforts(model).map((e) => (
+                    <option key={e} value={e}>
+                      {e}
                     </option>
                   ))}
                 </select>

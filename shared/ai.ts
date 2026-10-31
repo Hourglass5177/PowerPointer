@@ -167,11 +167,21 @@ export interface MCPConnection {
   checkedAt?: string;
   error?: string;
 }
-export const connectionPresets: { id: string; name: string; protocol: AIProtocol; baseUrl: string }[] = [
+type EffortModel = Pick<AIModel, "defaultReasoningEffort" | "supportedReasoningEfforts" | "capabilities">;
+// The configured default is always selectable; it must not be rejected for missing from the list.
+export function modelEfforts(model?: EffortModel) {
+  if (!model || model.capabilities?.reasoning === false) return [];
+  return [...new Set([...model.supportedReasoningEfforts.map(e => e.reasoningEffort.trim()), model.defaultReasoningEffort?.trim()])].filter(Boolean) as string[];
+}
+export function defaultEffort(model?: EffortModel) {
+  const effort = model?.defaultReasoningEffort?.trim() || "";
+  return modelEfforts(model).includes(effort) ? effort : "";
+}
+export const connectionPresets: { id: string; name: string; protocol: AIProtocol; baseUrl: string; reasoningEfforts?: string[]; defaultReasoningEffort?: string }[] = [
   { id: "openai", name: "OpenAI", protocol: "openai", baseUrl: "https://api.openai.com/v1" },
   { id: "anthropic", name: "Anthropic", protocol: "anthropic", baseUrl: "https://api.anthropic.com/v1" },
   { id: "gemini", name: "Gemini", protocol: "gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta" },
-  { id: "deepseek", name: "DeepSeek", protocol: "compatible", baseUrl: "https://api.deepseek.com/v1" },
+  { id: "deepseek", name: "DeepSeek", protocol: "compatible", baseUrl: "https://api.deepseek.com/v1", reasoningEfforts: ["low", "high", "max"], defaultReasoningEffort: "high" },
   { id: "qwen", name: "通义千问", protocol: "compatible", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
   { id: "openrouter", name: "OpenRouter", protocol: "compatible", baseUrl: "https://openrouter.ai/api/v1" },
   { id: "ollama", name: "Ollama", protocol: "compatible", baseUrl: "http://127.0.0.1:11434/v1" },

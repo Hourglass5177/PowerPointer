@@ -10,6 +10,7 @@ import { api, renderUrl } from "../api.ts";
 import { Icon } from "../controls.tsx";
 import type { AnswerLength, Scope } from "../../shared/types.ts";
 import { ModelList, AssistantSelect, selectedModel, ProfileButtons } from "../AIControls.tsx";
+import { defaultEffort, modelEfforts } from "../../shared/ai.ts";
 
 const scopeInfo = {
   page: ["当前页", "整页图像、选区及附加页面"],
@@ -108,7 +109,7 @@ export function ChatComposer({ r }: { r: Reader }) {
   const models = r.models;
   const modelValue = { ...data, connectionId: data.connectionId || r.conversation?.connectionId || r.ai.config?.preferences.defaultConnectionId, model: data.model || (!data.connectionId || data.connectionId === r.conversation?.connectionId ? r.conversation?.model : undefined) };
   const selected = selectedModel(models, modelValue, r.ai.config?.preferences.defaultConnectionId);
-  const effort = data.reasoningEffort || selected?.defaultReasoningEffort;
+  const effort = data.reasoningEffort || defaultEffort(selected);
   const openMenu = (name: string) =>
     setMenu((old) => (old === name ? "" : name));
   useEffect(() => {
@@ -428,9 +429,10 @@ export function ChatComposer({ r }: { r: Reader }) {
                     r.patchDraft({ reasoningEffort: e.target.value })
                   }
                 >
-                  {selected?.supportedReasoningEfforts.map((e) => (
-                    <option key={e.reasoningEffort} value={e.reasoningEffort}>
-                      {effortNames[e.reasoningEffort] || e.reasoningEffort}
+                  {!effort && <option value="">模型默认</option>}
+                  {modelEfforts(selected).map((e) => (
+                    <option key={e} value={e}>
+                      {effortNames[e] || e}
                     </option>
                   ))}
                 </select>

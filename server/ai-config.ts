@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { builtinAssistants, modelKey, type AIConnection, type AIUserPreferences, type AssistantProfile, type AIMemory, type AIUsage } from "../shared/ai.ts";
+import { builtinAssistants, defaultEffort, modelEfforts, modelKey, type AIConnection, type AIUserPreferences, type AssistantProfile, type AIMemory, type AIUsage } from "../shared/ai.ts";
 import type { AIModel, AISettings } from "../shared/types.ts";
 import { Store } from "./store.ts";
 import { Codex } from "./codex.ts";
@@ -9,7 +9,7 @@ import { discoverModels, invokeProvider, serviceUrl } from "./ai-provider.ts";
 
 export const settingsSchema = z.object({ connectionId: z.string().max(100).optional(), model: z.string().max(200).optional(), assistantId: z.string().max(100).optional(), reasoningEffort: z.string().max(30).optional(), agentTools: z.boolean().optional(), webSearch: z.boolean().optional(), textOnly: z.boolean().optional() });
 const capability = z.union([z.boolean(), z.literal("unknown")]);
-const modelSchema = z.object({ model: z.string().min(1).max(200), displayName: z.string().max(200), description: z.string().max(1000).optional(), isDefault: z.boolean().default(false), inputModalities: z.array(z.string()).optional(), defaultReasoningEffort: z.string().max(30).default(""), supportedReasoningEfforts: z.array(z.object({ reasoningEffort: z.string().max(30), description: z.string().max(200) })).max(20).default([]), capabilities: z.object({ vision: capability, tools: capability, reasoning: capability }).optional(), contextWindow: z.number().int().positive().optional(), custom: z.boolean().optional() });
+const modelSchema = z.object({ model: z.string().min(1).max(200), displayName: z.string().max(200), description: z.string().max(1000).optional(), isDefault: z.boolean().default(false), inputModalities: z.array(z.string()).optional(), defaultReasoningEffort: z.string().trim().max(30).default(""), supportedReasoningEfforts: z.array(z.object({ reasoningEffort: z.string().trim().max(30), description: z.string().max(200) })).max(20).transform(list => list.filter(e => e.reasoningEffort)).default([]), capabilities: z.object({ vision: capability, tools: capability, reasoning: capability }).optional(), contextWindow: z.number().int().positive().optional(), custom: z.boolean().optional() });
 const connectionSchema = z.object({ name: z.string().trim().min(1).max(100), protocol: z.enum(["codex", "openai", "compatible", "anthropic", "gemini"]), preset: z.string().max(100).optional(), baseUrl: z.string().max(2000), enabled: z.boolean(), models: z.array(modelSchema).max(2000), defaultModel: z.string().max(200).optional(), codexPath: z.string().max(2000).optional(), apiKey: z.string().max(8192).optional() });
 const assistantSchema = z.object({ name: z.string().trim().min(1).max(100), description: z.string().max(1000), prompt: z.string().max(20000), style: z.string().max(2000), settings: settingsSchema, scope: z.enum(["page", "nearby", "full"]), tools: z.array(z.enum(["course", "notes", "web", "artifacts"])).max(4), mcpToolIds: z.array(z.string().max(200)).max(100) });
 export class AIConfig {
@@ -82,8 +82,8 @@ export class AIConfig {
     const model = settings.model ? models.find(m => m.model === settings.model) : models.find(m => m.model === c.defaultModel) || models.find(m => m.isDefault) || models[0];
     if (!model) throw Error("此连接没有可用模型，请在 AI 连接中心获取模型或填写模型 ID");
     if (requireVision && model.capabilities?.vision !== true) throw Error("所选模型尚未确认支持图像。请选择图像模型，或明确改为仅文本问答。");
-    const effort = settings.reasoningEffort || model.defaultReasoningEffort;
-    if (effort && !model.supportedReasoningEfforts.some(e => e.reasoningEffort === effort)) throw Error("所选模型不支持此思考强度");
+    const effort = settings.reasoningEffort || defaultEffort(model);
+    if (effort && !modelEfforts(model).includes(effort)) throw Error("所选模型不支持此思考强度");
     return { connection: c, model, settings: { ...settings, connectionId: c.id, model: model.model, reasoningEffort: effort || undefined } };
   }
   assistants() { return this.store.all<AssistantProfile>("aiAssistant"); }
