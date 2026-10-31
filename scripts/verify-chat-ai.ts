@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { Document, Conversation, Turn } from "../shared/types.ts";
-const base = "http://127.0.0.1:4317";
+const base = "http://127.0.0.1:17317";
 const init = await fetch(base + "/api/bootstrap"),
   { csrf } = (await init.json()) as any;
 const headers = {

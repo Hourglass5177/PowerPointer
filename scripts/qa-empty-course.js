@@ -1,5 +1,5 @@
 async page => {
-  const courses = await (await page.request.get('http://127.0.0.1:4317/api/courses')).json();
+  const courses = await (await page.request.get('http://127.0.0.1:17317/api/courses')).json();
   const empty = { ...courses[0], id: 'empty-course-ui-check', name: '空课程回归检查', files: [], documentIds: [], selectedDocumentIds: [], changes: [], root: undefined };
   await page.route('**/api/courses', route => route.fulfill({ json: [...courses, empty] }));
   await page.route('**/api/reading/events', route => route.abort());
