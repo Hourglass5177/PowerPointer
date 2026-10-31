@@ -35,6 +35,8 @@ import type { PointerRequest } from "./selection.ts";
 import "./power-pointer.css";
 import "./workspace.css";
 import "./learning.css";
+import { applyChatFont, readChatFont } from "./chatFont.ts";
+applyChatFont(readChatFont());
 function useSaved<T>(key: string, fallback: T) {
   const [value, setValue] = useState<T>(() => {
     try {

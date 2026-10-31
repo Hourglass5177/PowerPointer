@@ -50,6 +50,7 @@
   height: 16px;
 }
 .chat-more .popover-panel {
+  left: auto;
   right: 0;
   min-width: 175px;
 }
@@ -92,7 +93,7 @@
   border-radius: 12px 12px 3px 12px;
   padding: 11px 14px;
   line-height: 1.65;
-  font-size: 14px;
+  font-size: calc(var(--chat-font-size, 16px) * 0.875);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-width: 94%;
@@ -155,10 +156,18 @@
   min-width: 0;
 }
 .chat-v2 .answer-v2 {
-  font-size: 16px;
+  font-size: var(--chat-font-size, 16px);
   line-height: 1.7;
   color: #252525;
   min-width: 0;
+}
+.chat-v2 .answer-v2 h1,
+.chat-v2 .answer-v2 h2,
+.chat-v2 .answer-v2 h3 {
+  font-size: 1em;
+}
+.chat-v2 .answer-v2 table {
+  font-size: 0.8125em;
 }
 .answer-v2 > :first-child {
   margin-top: 0;
@@ -664,8 +673,8 @@
   outline: none !important;
   border: 0;
   padding: 12px 12px 4px;
-  font-size: 14px;
-  line-height: 24px;
+  font-size: calc(var(--chat-font-size, 16px) * 0.875);
+  line-height: 1.7;
   min-height: 60px;
   max-height: 208px;
   width: 100%;

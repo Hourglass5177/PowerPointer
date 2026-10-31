@@ -11,6 +11,7 @@ import { Icon } from "../controls.tsx";
 import type { AnswerLength, Scope } from "../../shared/types.ts";
 import { ModelList, AssistantSelect, selectedModel, ProfileButtons } from "../AIControls.tsx";
 import { defaultEffort, modelEfforts } from "../../shared/ai.ts";
+import { applyChatFont, chatFontSizes, readChatFont, saveChatFont, type ChatFont } from "../chatFont.ts";
 
 const scopeInfo = {
   page: ["当前页", "整页图像、选区及附加页面"],
@@ -102,7 +103,8 @@ function Popup({
 }
 export function ChatComposer({ r }: { r: Reader }) {
   const [menu, setMenu] = useState(""),
-    [composing, setComposing] = useState(false);
+    [composing, setComposing] = useState(false),
+    [chatFont, setChatFont] = useState(() => readChatFont());
   const compositionEnded = useRef(0);
   const data = r.chatDraft,
     draft = r.draft;
@@ -450,6 +452,24 @@ export function ChatComposer({ r }: { r: Reader }) {
                   <option value="short">简短</option>
                   <option value="standard">标准</option>
                   <option value="detailed">详细</option>
+                </select>
+              </label>
+              <label>
+                问答字号
+                <select
+                  value={chatFont}
+                  onChange={(e) => {
+                    const font = e.target.value as ChatFont;
+                    setChatFont(font);
+                    saveChatFont(font);
+                    applyChatFont(font);
+                  }}
+                >
+                  {chatFontSizes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
