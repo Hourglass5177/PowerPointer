@@ -2,7 +2,7 @@ async page => {
   const context=await page.context().browser().newContext({viewport:{width:1440,height:980},deviceScaleFactor:1.5});
   const p=await context.newPage();
   try {
-    await p.goto('http://127.0.0.1:4317/');
+    await p.goto('http://127.0.0.1:17317/');
     await p.getByLabel('选择课件',{exact:true}).selectOption({label:'纯扫描 图形.pdf'});
     await p.getByLabel('缩放',{exact:true}).selectOption('1.25');
     await p.getByTitle('旋转页面',{exact:true}).click();
@@ -14,7 +14,7 @@ async page => {
     await p.mouse.move(b.x+315*1.25,b.y+205*1.25,{steps:10});await p.mouse.up();
     await p.locator('.attached-context').click();
     const img=p.getByAltText('框选裁图预览',{exact:true});await img.waitFor();
-    const src=await img.getAttribute('src'),url=new URL(src,'http://127.0.0.1:4317'),rect=JSON.parse(url.searchParams.get('rect'));
+    const src=await img.getAttribute('src'),url=new URL(src,'http://127.0.0.1:17317'),rect=JSON.parse(url.searchParams.get('rect'));
     [75,190,205,315].forEach((v,i)=>{if(Math.abs(rect[i]-v)>2)throw Error('High DPI rotated selection failed');});
     await img.evaluate(async el=>{if(!el.complete)await new Promise((resolve,reject)=>{el.onload=resolve;el.onerror=reject;});});
     await p.screenshot({path:'output/playwright/hidpi-rotation.png'});

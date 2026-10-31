@@ -5,6 +5,21 @@ import os from "node:os";
 import path from "node:path";
 import { buildFingerprint, dependencyFingerprint } from "../scripts/build-fingerprint.mjs";
 import { buildEnvironment } from "../scripts/build.mjs";
+import { defaultPort, listenFailure } from "../scripts/port.mjs";
+
+test("默认端口避开 Windows 默认和本机常见的动态保留范围", () => {
+  assert.equal(defaultPort, 17317);
+  assert.ok(defaultPort > 15000 && defaultPort < 49152);
+});
+
+test("端口无法监听时说明原因和换端口方法，其他错误保留原文", () => {
+  const denied = listenFailure({ code: "EACCES", message: "listen EACCES" }, 4317);
+  assert.match(denied, /4317/);
+  assert.match(denied, /Windows/);
+  assert.match(denied, /\$env:PORT='17317'/);
+  assert.match(listenFailure({ code: "EADDRINUSE", message: "listen EADDRINUSE" }, 17317), /已被其他程序占用.*\$env:PORT='17318'/s);
+  assert.equal(listenFailure({ code: "EOTHER", message: "boom" }, 17317), "无法启动本地服务：boom");
+});
 
 test("启动指纹覆盖源码、配置和依赖，阅读数据变动不会触发构建", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "lecture-launch-"));

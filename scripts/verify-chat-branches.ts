@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-const base = "http://127.0.0.1:4317/api",
+const base = "http://127.0.0.1:17317/api",
   { csrf } = await (await fetch(base + "/bootstrap")).json();
 const headers = {
   "content-type": "application/json",

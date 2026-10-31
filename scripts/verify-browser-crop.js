@@ -37,7 +37,7 @@ async (page) => {
   });
   const src = await crop.getAttribute("src");
   const selected = JSON.parse(
-    new URL(src, "http://127.0.0.1:4317").searchParams.get("rect"),
+    new URL(src, "http://127.0.0.1:17317").searchParams.get("rect"),
   );
   [75, 190, 205, 315].forEach((v, i) => {
     if (Math.abs(selected[i] - v) > 2) throw Error("框选坐标不匹配");

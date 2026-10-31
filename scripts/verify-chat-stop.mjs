@@ -1,5 +1,5 @@
 import {readFileSync,writeFileSync} from 'node:fs';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';
-const base='http://127.0.0.1:4317/api',{csrf}=await(await fetch(base+'/bootstrap')).json(), headers={'content-type':'application/json',cookie:`lecture_session=${csrf}`,'x-lecture-token':csrf};
+const base='http://127.0.0.1:17317/api',{csrf}=await(await fetch(base+'/bootstrap')).json(), headers={'content-type':'application/json',cookie:`lecture_session=${csrf}`,'x-lecture-token':csrf};
 async function api(url,body){const r=await fetch(base+url,{headers,method:body===undefined?'GET':'POST',body:body===undefined?undefined:JSON.stringify(body)});const v=await r.json();if(!r.ok)throw Error(JSON.stringify(v));return v;}
 const r=JSON.parse(readFileSync('output/chat-check/real-agent.json','utf8')),c=await api(`/documents/${r.documentId}/conversations`,{}),result={date:new Date().toISOString()};
 const t=await api('/turns',{requestId:randomUUID(),question:'请简要解释导数为何是切线斜率，并引用本页。',snapshot:{...r.turns[0].snapshot,conversationId:c.id,images:undefined,sources:undefined,agentTools:false,webSearch:false,reasoningEffort:'high',model:'gpt-6-luna'}});

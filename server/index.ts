@@ -30,6 +30,7 @@ import { knowledgeText } from "./learning-context.ts";
 import { Lifecycle } from "./lifecycle.ts";
 import { powerRoutes, selectionSchema } from "./power-routes.ts";
 import { citedSources, portableAnswer, sourceMap } from "../shared/chat.ts";
+import { defaultPort, listenFailure } from "../scripts/port.mjs";
 import {
   activeStates,
   type Document,
@@ -62,7 +63,7 @@ const external = new ExternalServices(aiConfig);
 const artifacts = new ArtifactStore(store, () => events.emit("research"));
 const research = new ResearchService(aiConfig, runtime, external, artifacts, scheduler, () => events.emit("research"));
 const app = express(),
-  port = Number(process.env.PORT || 4317),
+  port = Number(process.env.PORT || defaultPort),
   origin = `http://127.0.0.1:${port}`,
   token = randomBytes(32).toString("hex");
 app.disable("x-powered-by");
@@ -1028,7 +1029,7 @@ void reconcile();
 for (const d of store.all<Document>("document"))
   if (d.indexStatus === "indexing") void indexDocument(d);
 const server = app.listen(port, "127.0.0.1", (error?: Error) => {
-  if (error) { console.error(`无法启动本地服务：${error.message}`); process.exit(1); }
+  if (error) { console.error(listenFailure(error, port)); process.exit(1); }
   console.log(`Power Pointer：${origin}`);
 },
 );

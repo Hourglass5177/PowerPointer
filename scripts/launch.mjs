@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildFingerprint, dependencyFingerprint } from "./build-fingerprint.mjs";
+import { defaultPort } from "./port.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(root);
 if (Number(process.versions.node.split(".")[0]) < 24) {
@@ -31,7 +32,7 @@ function run(args) {
     );
   });
 }
-const port = process.env.PORT || "4317",
+const port = process.env.PORT || String(defaultPort),
   url = `http://127.0.0.1:${port}`;
 if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
   console.error("PORT 必须是 1 到 65535 的整数。");
