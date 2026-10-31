@@ -10,6 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AIModel, Source, ToolActivity } from "../shared/types.ts";
 import type { ReaderToolContext } from "./reader-tools.ts";
+import { resolveCodexCommand, type CodexCommand } from "./codex-command.ts";
 const readerToolNames = [
   "search_course",
   "read_pages",
@@ -134,31 +135,32 @@ export class Codex extends EventEmitter {
     const local = existsSync(settingsPath)
       ? JSON.parse(readFileSync(settingsPath, "utf8"))
       : {};
-    this.executable = this.startupOptions.executable || process.env.LECTURE_CODEX_PATH || "";
-    if (!this.executable) {
+    const configured = this.startupOptions.executable || process.env.LECTURE_CODEX_PATH || "";
+    let command: CodexCommand;
+    if (configured) command = resolveCodexCommand(configured);
+    else {
       try {
-        this.executable = execFileSync(
-          "powershell.exe",
-          [
-            "-NoProfile",
-            "-Command",
-            "(Get-Command codex -ErrorAction Stop).Source",
-          ],
-          {
-            encoding: "utf8",
-            windowsHide: true,
-            stdio: ["ignore", "pipe", "ignore"],
-          },
-        ).trim();
+        command = resolveCodexCommand(
+          execFileSync(
+            "powershell.exe",
+            [
+              "-NoProfile",
+              "-Command",
+              "(Get-Command codex -ErrorAction Stop).Source",
+            ],
+            {
+              encoding: "utf8",
+              windowsHide: true,
+              stdio: ["ignore", "pipe", "ignore"],
+            },
+          ),
+        );
       } catch {
-        this.executable = local.codexExecutable || "";
+        command = resolveCodexCommand(local.codexExecutable || "");
       }
     }
-    if (!this.executable || !existsSync(this.executable))
-      throw Error(
-        "找不到 Codex CLI。请通过官方方式安装，或在 local-settings.json 中填写已验证的 codexExecutable 路径。",
-      );
-    this.version = execFileSync(this.executable, ["--version"], {
+    this.executable = command.command;
+    this.version = execFileSync(this.executable, [...command.args, "--version"], {
       encoding: "utf8",
       windowsHide: true,
     }).trim();
@@ -172,6 +174,7 @@ export class Codex extends EventEmitter {
       )
         delete env[k];
     const args = [
+      ...command.args,
       "app-server",
       "--listen",
       "stdio://",
@@ -423,7 +426,7 @@ export class Codex extends EventEmitter {
     beforeTurnId?: string,
     previousTurnId?: string,
   ) {
-    const owner = new Codex(path.dirname(this.cwd));
+    const owner = new Codex(path.dirname(this.cwd), { executable: this.startupOptions.executable });
     try {
       return await owner.forkOwned(
         model,
