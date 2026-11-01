@@ -708,7 +708,7 @@ export function ReadingWindows({
           narrow={viewport < 650}
         />
       ))}
-      {!!w.sessions.length && (
+      {(w.sessions.length > 1 || w.sessions.some((s) => s.layout.minimized)) && (
         <details className="reading-window-switcher" aria-label="打开的解释窗">
           <summary>解释窗 {w.sessions.length}</summary>
           <nav aria-label="解释窗列表">

@@ -326,7 +326,7 @@
   bottom: 36px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 620;
+  z-index: 590;
   display: flex;
   align-items: center;
   gap: 4px;
