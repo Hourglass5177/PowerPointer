@@ -479,9 +479,9 @@ function App() {
             className="toolbar-title"
             title={r.workspaceView === "reading" ? r.doc?.name : r.course?.name}
           >
-            {r.workspaceView === "reading"
-              ? r.doc ? chapterName(r.course, r.doc) : "阅读"
-              : workspaceLabels[r.workspaceView]}
+            {r.workspaceView === "reading" && r.doc
+              ? chapterName(r.course, r.doc)
+              : r.workspaceView !== "reading" && r.course?.name}
           </span>
           {r.workspaceView === "reading" && (
             <>
