@@ -54,6 +54,7 @@ export class AIConfig {
         const status = await this.codex.status();
         let limits: unknown, limitMessage: string | undefined;
         try { limits = await this.codex.rateLimits(); } catch { limitMessage = "当前 CLI 未返回订阅额度，额度信息暂不可用"; }
+        this.store.put("aiConnection", { ...c, checkedAt: new Date().toISOString(), status: status.authenticated ? "ready" : "unconfigured", error: undefined }); this.notify();
         return { id, ...status, limits, limitMessage };
       }
       const key = await this.vault.get(id);
