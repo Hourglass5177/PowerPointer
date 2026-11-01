@@ -406,3 +406,22 @@ test("历史筛选列出已删除的来源，名称去重，现存课件不重�
   const conv = (documentId: string, documentName?: string) => ({ documentId, documentName }) as Conversation;
   assert.deepEqual(deletedSources([conv("gone", "旧课件.pdf"), conv("gone", "旧课件.pdf"), conv("kept", "现存.pdf"), conv("nameless")], [{ id: "kept" }]), [{ id: "gone", name: "旧课件.pdf" }, { id: "nameless", name: "未命名课件" }]);
 });
+
+test("按会话读取问答走索引，顺序和隔离与全表筛选一致", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "lecture-turns-"));
+  const store = new Store(dir);
+  try {
+    for (const [id, conversationId] of [["a", "c1"], ["b", "c2"], ["c", "c1"]]) store.put("turn", { id, conversationId });
+    store.put("readingTurn", { id: "w", conversationId: "c1" });
+    store.put("turn", { id: "a", conversationId: "c1", answer: "更新后不改变顺序" });
+    assert.deepEqual(store.turnsOf("c1").map((t) => t.id), ["a", "c"]);
+    assert.equal(store.turnsOf("c1")[0].answer, "更新后不改变顺序");
+    assert.deepEqual(store.turnsOf("missing"), []);
+    const plan = store.db.prepare("EXPLAIN QUERY PLAN SELECT body FROM records WHERE kind='turn' AND json_extract(body,'$.conversationId')=? ORDER BY rowid").all("c1") as { detail: string }[];
+    assert.ok(plan.some((p) => p.detail.includes("turn_conversation")), JSON.stringify(plan));
+  } finally {
+    store.close();
+    assert.ok(path.resolve(dir).startsWith(path.join(os.tmpdir(), "lecture-turns-")));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

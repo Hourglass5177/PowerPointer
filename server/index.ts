@@ -162,7 +162,7 @@ const mustConv = (id: string) => {
   return c;
 };
 function turns(id: string) {
-  return store.all<Turn>("turn").filter((t) => t.conversationId === id);
+  return store.turnsOf(id);
 }
 function update(t: Turn) {
   for (const source of [...t.snapshot.sources, ...(t.toolSources || [])])

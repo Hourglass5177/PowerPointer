@@ -43,7 +43,7 @@ export class ChatService {
       }
   }
   turns(id: string) {
-    return this.store.all<Turn>("turn").filter((t) => t.conversationId === id);
+    return this.store.turnsOf(id);
   }
   conversation(id: string) {
     const c = this.store.conversation(id);
