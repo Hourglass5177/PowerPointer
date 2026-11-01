@@ -26,7 +26,11 @@ export function ChatPane({ r, onClose, expanded = false, onExpand }: { r: Reader
   };
   useLayoutEffect(() => {
     const el = scroll.current;
-    if (!el || !r.turns.length) return;
+    if (!el) return;
+    if (!r.turns.length) {
+      el.scrollTop = 0;
+      return;
+    }
     if (loadedConversation.current !== r.conversationId) {
       loadedConversation.current = r.conversationId;
       const saved = positions.get(r.conversationId);
@@ -41,7 +45,8 @@ export function ChatPane({ r, onClose, expanded = false, onExpand }: { r: Reader
   }, [r.sending]);
   useEffect(() => {
     const observer = new ResizeObserver(() => {
-      if (follow.current && scroll.current)
+      // The empty state reads from the top; only a conversation follows its latest turn.
+      if (follow.current && scroll.current?.querySelector(".chat-turn"))
         scroll.current.scrollTop = scroll.current.scrollHeight;
     });
     if (content.current) observer.observe(content.current);
