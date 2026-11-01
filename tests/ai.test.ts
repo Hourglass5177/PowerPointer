@@ -43,6 +43,24 @@ test("思考强度：默认值计入可选项，不支持推理时不发送，�
   } finally { await f.close(); }
 });
 
+test("解释窗工具检索创建时冻结的讨论，并可查阅用户附加的页面", async () => {
+  const f = fixture();
+  try {
+    const contextId = randomUUID(), r = task(f);
+    f.store.put("context", { id: contextId, turns: [{ id: randomUUID(), question: "暗号雪松418是什么", answer: "冻结回答", snapshot: { sources: [] } }] });
+    const search = (tools: ResearchTools) => tools.call("search_history", { query: "雪松418" }, "h1", new AbortController().signal);
+    const pages = async (tools: ResearchTools) => (JSON.parse((await tools.call("search_course", { query: "积分 面积" }, "c1", new AbortController().signal)).text).sources as { page: number }[]).map(s => s.page);
+    const plain = new ResearchTools({ ...r, scope: "page", page: 1 }, f.external, f.artifacts, () => {});
+    assert.ok(!(await search(plain)).text.includes("冻结回答"));
+    assert.ok(!(await pages(plain)).includes(3));
+    plain.close();
+    const frozen = new ResearchTools({ ...r, scope: "page", page: 1 }, f.external, f.artifacts, () => {}, undefined, { contextSnapshotId: contextId, extraPages: [3] });
+    assert.ok((await search(frozen)).text.includes("冻结回答"));
+    assert.ok((await pages(frozen)).includes(3));
+    frozen.close();
+  } finally { await f.close(); }
+});
+
 test("预设服务的已有模型未填强度时使用官方列表，用户填写和未确认能力不受影响", async () => {
   const f = fixture();
   try {
