@@ -894,7 +894,7 @@ function App() {
             ),
             top: Math.max(
               8,
-              Math.min(window.innerHeight - 130, pointerMenu.position.y),
+              Math.min(window.innerHeight - 270, pointerMenu.position.y),
             ),
           }}
         >
@@ -923,8 +923,23 @@ function App() {
                   window.getSelection()?.removeAllRanges();
                   r.guard(() => reading.open(request));
                 }}
+                className="pointer-explain"
+                aria-label={`弹窗解释，使用 ${reading.modelFor(pointerMenu)}`}
               >
                 弹窗解释
+                <small>使用 {reading.modelFor(pointerMenu)}</small>
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  if (!r.requireAI()) return;
+                  const request = pointerMenu;
+                  setPointerMenu(undefined);
+                  window.getSelection()?.removeAllRanges();
+                  r.guard(() => reading.open(request, false));
+                }}
+              >
+                换模型后解释…
               </button>
               <button role="menuitem" onClick={() => {
                 const request = pointerMenu; setPointerMenu(undefined);

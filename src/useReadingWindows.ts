@@ -10,7 +10,7 @@ import {
   type Turn,
   type KnowledgeChapter,
 } from "../shared/types.ts";
-import { currentModel } from "../shared/ai.ts";
+import { currentModel, selectedModel } from "../shared/ai.ts";
 import type { PointerRequest } from "./selection.ts";
 export function useReadingWindows(r: Reader) {
   const [sessions, setSessions] = useState<ReadingSession[]>([]),
@@ -35,7 +35,8 @@ export function useReadingWindows(r: Reader) {
     }[]
   >([]);
   const queues = useRef(new Map<string, Promise<unknown>>()),
-    closed = useRef(new Set<string>());
+    closed = useRef(new Set<string>()),
+    reviewing = useRef(new Set<string>());
   const readState = (value: {
     sessions: ReadingSession[];
     turns: Turn[];
@@ -129,7 +130,15 @@ export function useReadingWindows(r: Reader) {
       setTurns((ts) => (ts.some((x) => x.id === t.id) ? ts : [...ts, t]));
     return t;
   };
-  const open = async (request: PointerRequest) => {
+  const parentOf = (request: PointerRequest) =>
+    request.parentId ? sessions.find((s) => s.id === request.parentId) : undefined;
+  const modelFor = (request: PointerRequest) => {
+    const parent = parentOf(request);
+    const model = parent ? selectedModel(r.models, parent.settings, defaultConnection) : chosen;
+    return model?.displayName || parent?.settings.model || "默认模型";
+  };
+  // With send false the window waits on its open settings, so nothing is spent before a model is picked.
+  const open = async (request: PointerRequest, send = true) => {
     if (!r.requireAI()) return;
     const id = crypto.randomUUID(),
       width = Math.min(400, window.innerWidth - 24),
@@ -142,9 +151,12 @@ export function useReadingWindows(r: Reader) {
       100,
       Math.min(window.innerHeight - height - 16, request.position.y),
     );
-    const parent = request.parentId
-      ? sessions.find((s) => s.id === request.parentId)
-      : undefined;
+    const parent = parentOf(request);
+    const question = request.selection.text
+      ? `请解释“${request.selection.text.slice(0, 5000)}”。`
+      : "请解释这个框选区域。";
+    // Set first: the event stream can render the window before this request returns.
+    if (!send) reviewing.current.add(id);
     const session = await api<ReadingSession>("/reading", {
       method: "POST",
       body: JSON.stringify({
@@ -163,15 +175,11 @@ export function useReadingWindows(r: Reader) {
         },
       }),
     });
-    setSessions((ss) => (ss.some((s) => s.id === id) ? ss : [...ss, session]));
+    const opened = send ? session : { ...session, draft: question };
+    setSessions((ss) => (ss.some((s) => s.id === id) ? ss.map((s) => (s.id === id ? opened : s)) : [...ss, opened]));
     setFocused(id);
-    await ask(
-      id,
-      request.selection.text
-        ? `请解释“${request.selection.text.slice(0, 5000)}”。`
-        : "请解释这个框选区域。",
-      id,
-    );
+    if (send) await ask(id, question, id);
+    else await patch(id, { draft: question });
     return session;
   };
   const close = async (id: string, branch = false) => {
@@ -219,8 +227,10 @@ export function useReadingWindows(r: Reader) {
     knowledgeProgress,
     notesVersion,
     settings,
+    reviewing,
     patch,
     ask,
+    modelFor,
     open,
     close,
     promote,
