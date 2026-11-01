@@ -50,6 +50,15 @@ export async function* sse(response: Response): AsyncGenerator<any> {
     }
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
+// An abort mid-stream surfaces as a raw runtime error; report why the stream ended instead.
+async function* readable<T>(stream: AsyncGenerator<T>, stopped: AbortSignal, limit: AbortSignal) {
+  try { yield* stream; }
+  catch (e) {
+    if (stopped.aborted) throw Error("已停止");
+    if (limit.aborted) throw Error("模型响应超时，请缩小任务后重试");
+    throw e;
+  }
+}
 function toolArguments(value: unknown): Record<string, unknown> {
   const args = typeof value === "string" ? JSON.parse(value || "{}") : value || {};
   if (!args || typeof args !== "object" || Array.isArray(args)) throw Error("工具参数必须是对象");
@@ -103,7 +112,7 @@ export async function invokeProvider(connection: AIConnection, key: string, req:
   const calls = new Map<string, { id: string; name: string; args: string | Record<string, unknown>; thoughtSignature?: string }>();
   const nativeContent: any[] = [];
   const add = (delta: string) => { text += delta; req.onText?.(text); };
-  for await (const event of sse(response)) {
+  for await (const event of readable(sse(response), req.signal, signal)) {
     if (event.error || event.type === "error" || event.type === "response.failed") throw Error("模型服务中断了生成，请检查连接状态后重试");
     if (protocol === "compatible") {
       const delta = event.choices?.[0]?.delta;

@@ -891,7 +891,7 @@ async function execute(t: Turn, reuse = false) {
     if (t.state === "completed") t.error = undefined;
   } catch (e) {
     t.state = controller.signal.aborted ? "stopped" : "failed";
-    t.error = redact(e instanceof Error ? e.message : String(e));
+    t.error = t.state === "stopped" ? undefined : redact(e instanceof Error ? e.message : String(e));
   } finally {
     t.durationMs = Date.now() - started;
     broker?.close();
