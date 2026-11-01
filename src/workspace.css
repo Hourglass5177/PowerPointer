@@ -738,9 +738,12 @@ p {
     grid-column: 2 / -1;
     justify-content: space-evenly;
     min-width: 0;
+    overflow-x: auto;
+    justify-content: flex-start;
   }
   .workspace-tabs button {
-    padding: 8px 12px;
+    padding: 8px 9px;
+    flex: none;
   }
   .workspace-tabs button[aria-current]::after {
     bottom: -3px;

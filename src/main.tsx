@@ -25,6 +25,7 @@ import { useNotes } from "./useNotes.ts";
 import { Welcome, LearningGuide, ConnectionSetup } from "./Onboarding.tsx";
 import { AIConnectionCenter } from "./AIConnectionCenter.tsx";
 import { ResearchWorkspace } from "./ResearchWorkspace.tsx";
+import { MindMapWorkspace } from "./MindMapWorkspace.tsx";
 import ManualPage from "./ManualPage.tsx";
 import { useManual } from "./useManual.ts";
 import { requestResearch, type ResearchRequest } from "./research.ts";
@@ -35,6 +36,7 @@ import type { PointerRequest } from "./selection.ts";
 import "./power-pointer.css";
 import "./workspace.css";
 import "./learning.css";
+import "./mind-map.css";
 function useSaved<T>(key: string, fallback: T) {
   const [value, setValue] = useState<T>(() => {
     try {
@@ -453,6 +455,7 @@ function App() {
                         reading: "file",
                         overview: "list",
                         materials: "slides",
+                        mindmap: "map",
                         history: "history",
                         research: "steps",
                       }[view]
@@ -856,6 +859,7 @@ function App() {
             onCreate={() => setCreating(true)}
           />
         )}
+        {r.workspaceView === "mindmap" && <MindMapWorkspace r={r} />}
         {r.workspaceView === "history" && <HistoryWorkspace r={r} />}
         {r.workspaceView === "research" && <ResearchWorkspace key={r.courseId || r.docId} r={r} request={researchRequest} onConsumed={() => setResearchRequest(undefined)} />}
       </div>

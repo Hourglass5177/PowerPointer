@@ -9,7 +9,7 @@ export const manualEntries: ManualEntry[] = [
   { id: "reading", group: "开始阅读", keywords: "阅读 搜索 定位 翻页 缩放 框选 选字 快捷键 布局" },
   { id: "questions", group: "理解与整理", keywords: "提问 问答 解释 来源 范围 全文检索 追问 附图" },
   { id: "notes", group: "理解与整理", keywords: "笔记 记录 摘录 收藏 自动保存 复习 恢复" },
-  { id: "overview", group: "理解与整理", keywords: "总览 整理 章节 汇总 总结 暂停 重试" },
+  { id: "overview", group: "理解与整理", keywords: "总览 整理 章节 汇总 总结 暂停 重试 思维导图 导图 节点 大纲 SVG PNG JSON Markdown" },
   { id: "history", group: "理解与整理", keywords: "历史 会话 对话 归档 分支 重新回答 导出" },
   { id: "research", group: "深入使用", keywords: "研究 成果 报告 对比 核查 提纲 题目 版本" },
   { id: "settings", group: "深入使用", keywords: "连接 设置 API Codex ChatGPT 本地模型 助手 记忆 用量 MCP 联网" },

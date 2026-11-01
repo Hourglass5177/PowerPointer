@@ -16,6 +16,11 @@ export function Icon({ name, size = 18 }: { name: string; size?: number }) {
     restore: "M4 5v5h5 M4 10a8 8 0 1 1 1 7 M12 8v5h4",
     list: "M8 5h13 M8 12h13 M8 19h13 M3 5h1 M3 12h1 M3 19h1",
     steps: "M3 18h6v-6h6V6h6 M3 7h4 M3 11h4",
+    map: "M12 4v5 M12 9H6v4 M12 9h6v4 M6 13v3 M18 13v3 M3 16h6v5H3z M15 16h6v5h-6z M9 2h6v5H9z",
+    undo: "M9 7H4v-5 M4 7l4-4 M4 7h9a7 7 0 1 1-6 11",
+    redo: "M15 7h5v-5 M20 7l-4-4 M20 7h-9a7 7 0 1 0 6 11",
+    trash: "M4 7h16 M9 7V4h6v3 M7 7l1 14h8l1-14 M10 11v6 M14 11v6",
+    center: "M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5 M12 8v8 M8 12h8",
     info: "M12 11v6 M12 7v1 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0",
     globe:
       "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M3 12h18 M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18",

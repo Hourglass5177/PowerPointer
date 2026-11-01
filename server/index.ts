@@ -26,6 +26,7 @@ import { Scheduler } from "./scheduler.ts";
 import { CourseService } from "./courses.ts";
 import { ReadingService, contextText, relatedTurns } from "./reading.ts";
 import { KnowledgeService } from "./knowledge.ts";
+import { MindMapService } from "./mind-maps.ts";
 import { knowledgeText } from "./learning-context.ts";
 import { Lifecycle } from "./lifecycle.ts";
 import { powerRoutes, selectionSchema } from "./power-routes.ts";
@@ -253,13 +254,21 @@ const reading = new ReadingService(
   notify,
   () => lifecycle.collect(),
 );
-const knowledge = new KnowledgeService(
-  store,
-  courses,
-  async (input) => {
+async function generateLearningContent(
+  input: {
+    prompt: string;
+    documentId?: string;
+    page?: number;
+    settings: AISettings;
+    signal: AbortSignal;
+  },
+  taskKind: "knowledge" | "mindmap",
+) {
     const started = Date.now();
     let usage: { input: number; output: number; total: number } | undefined;
     let usageState: "completed" | "failed" | "stopped" = "failed", usageError: string | undefined;
+    let connectionId = input.settings.connectionId || "codex",
+      model = input.settings.model || "default";
     const release = await scheduler.acquire(input.signal, true);
     let worker: AIWorker | undefined;
     const images: string[] = [];
@@ -267,6 +276,8 @@ const knowledge = new KnowledgeService(
       input.signal.throwIfAborted();
       const resolved = await aiConfig.resolve(input.settings, !!input.page);
       const selected = resolved.model, effort = resolved.settings.reasoningEffort;
+      connectionId = resolved.connection.id;
+      model = selected.model;
       const options = {
         ephemeral: true,
         agentTools: false,
@@ -307,26 +318,36 @@ const knowledge = new KnowledgeService(
       if (result.status !== "completed" || !result.text.trim())
         throw Error("本批次没有返回完整内容");
       usageState = "completed";
-      return result.text;
+      return { text: result.text, connectionId, model };
     } catch (e) {
       usageState = input.signal.aborted ? "stopped" : "failed"; usageError = e instanceof Error ? e.message : "生成失败"; throw e;
     } finally {
-      aiConfig.usage({ connectionId: input.settings.connectionId || "codex", model: input.settings.model || "default", taskKind: "knowledge", durationMs: Date.now() - started, state: usageState, error: usageError, ...usage });
+      aiConfig.usage({ connectionId, model, taskKind, durationMs: Date.now() - started, state: usageState, error: usageError, ...usage });
       await worker?.shutdown();
       for (const file of images) await unlink(file).catch(() => {});
       release();
     }
-  },
+}
+const knowledge = new KnowledgeService(
+  store,
+  courses,
+  async (input) => (await generateLearningContent(input, "knowledge")).text,
   notify,
+);
+const mindMaps = new MindMapService(
+  store,
+  courses,
+  (input) => generateLearningContent(input, "mindmap"),
 );
 powerRoutes(app, {
   store,
   courses,
   reading,
   knowledge,
+  mindMaps,
   lifecycle,
-  resolveSettings: async (settings: AISettings) => {
-    return { ...(await aiConfig.resolve(settings, true)).settings, assistantSnapshot: aiConfig.assistant(settings.assistantId), agentTools: false, webSearch: false };
+  resolveSettings: async (settings: AISettings, vision = true) => {
+    return { ...(await aiConfig.resolve(settings, vision)).settings, assistantSnapshot: aiConfig.assistant(settings.assistantId), agentTools: false, webSearch: false };
   },
   render: (id, page, rotation, rect) =>
     render(pdfPath(id), page, rotation, rect),
