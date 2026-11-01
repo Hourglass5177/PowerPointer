@@ -167,6 +167,19 @@ export interface MCPConnection {
   checkedAt?: string;
   error?: string;
 }
+type ModelChoice = { connectionId?: string; model?: string };
+export function selectedModel(models: AIModel[], value: ModelChoice, defaultConnection = DEFAULT_CONNECTION) {
+  const id = value.connectionId || defaultConnection;
+  const available = models.filter(m => (m.connectionId || DEFAULT_CONNECTION) === id);
+  return available.find(m => m.model === value.model) || (!value.model ? available.find(m => m.isDefault) || available[0] : undefined);
+}
+// The model the composer shows; explanation windows must spend on this same model.
+export function currentModel(models: AIModel[], draft: ModelChoice, conversation: ModelChoice | undefined, defaultConnection?: string) {
+  return selectedModel(models, {
+    connectionId: draft.connectionId || conversation?.connectionId || defaultConnection,
+    model: draft.model || (!draft.connectionId || draft.connectionId === conversation?.connectionId ? conversation?.model : undefined),
+  }, defaultConnection);
+}
 type EffortModel = Pick<AIModel, "defaultReasoningEffort" | "supportedReasoningEfforts" | "capabilities">;
 // The configured default is always selectable; it must not be rejected for missing from the list.
 export function modelEfforts(model?: EffortModel) {

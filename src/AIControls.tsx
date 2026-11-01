@@ -1,14 +1,10 @@
 import { useState } from "react";
 import type { AIModel, AISettings } from "../shared/types.ts";
-import { modelKey, profileLabels } from "../shared/ai.ts";
+import { modelKey, profileLabels, selectedModel } from "../shared/ai.ts";
 import type { useAIConfig } from "./useAIConfig.ts";
 
+export { selectedModel };
 export type AIState = ReturnType<typeof useAIConfig>;
-export function selectedModel(models: AIModel[], value: AISettings, defaultConnection = "codex") {
-  const id = value.connectionId || defaultConnection;
-  const available = models.filter(m => (m.connectionId || "codex") === id);
-  return available.find(m => m.model === value.model) || (!value.model ? available.find(m => m.isDefault) || available[0] : undefined);
-}
 export function ModelList({ models, value, onChange, ai, onDone }: { models: AIModel[]; value: AISettings; onChange: (v: AISettings) => void; ai: AIState; onDone?: () => void }) {
   const [search, setSearch] = useState(""), [filter, setFilter] = useState("all"), [error, setError] = useState("");
   const prefs = ai.config?.preferences;

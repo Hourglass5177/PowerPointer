@@ -223,6 +223,18 @@ test("原生多轮保留推理签名、独立图像与并行工具结果，不�
   }
 });
 
+test("连接设置的默认模型决定模型目录中的默认项", async () => {
+  const f = fixture();
+  try {
+    const m = f.c.models[0];
+    const c = { ...f.c, models: [m, { ...m, model: "second", displayName: "Second", isDefault: false }], defaultModel: "second" };
+    f.store.put("aiConnection", c);
+    assert.deepEqual((await f.config.models(c.id)).map(x => [x.model, x.isDefault]), [["fixture", false], ["second", true]]);
+    f.store.put("aiConnection", { ...c, defaultModel: undefined });
+    assert.deepEqual((await f.config.models(c.id)).map(x => [x.model, x.isDefault]), [["fixture", true], ["second", false]]);
+  } finally { await f.close(); }
+});
+
 test("模型以连接区分，未知图像能力不会自动降级或转向其他服务", async () => {
   const f = fixture();
   try {

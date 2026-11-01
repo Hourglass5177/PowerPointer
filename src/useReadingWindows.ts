@@ -10,6 +10,7 @@ import {
   type Turn,
   type KnowledgeChapter,
 } from "../shared/types.ts";
+import { currentModel } from "../shared/ai.ts";
 import type { PointerRequest } from "./selection.ts";
 export function useReadingWindows(r: Reader) {
   const [sessions, setSessions] = useState<ReadingSession[]>([]),
@@ -86,14 +87,13 @@ export function useReadingWindows(r: Reader) {
       stream?.close();
     };
   }, [r.ready]);
+  const defaultConnection = r.ai.config?.preferences.defaultConnectionId;
+  const chosen = currentModel(r.models, r.chatDraft, r.conversation, defaultConnection);
   const settings: AISettings = {
-    connectionId: r.chatDraft.connectionId || r.conversation?.connectionId || r.ai.config?.preferences.defaultConnectionId,
+    connectionId: chosen?.connectionId || r.chatDraft.connectionId || r.conversation?.connectionId || defaultConnection,
     assistantId: r.chatDraft.assistantId,
     textOnly: r.chatDraft.textOnly,
-    model:
-      r.chatDraft.model ||
-      r.conversation?.model ||
-      r.models.find((m) => m.isDefault)?.model,
+    model: chosen?.model,
     reasoningEffort: r.chatDraft.reasoningEffort,
     agentTools: r.chatDraft.agentTools ?? true,
     webSearch: r.chatDraft.webSearch ?? false,
