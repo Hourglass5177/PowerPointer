@@ -112,6 +112,10 @@ export class ExternalServices {
     c.checkedAt = new Date().toISOString(); c.error = undefined;
     this.config.store.put("aiMCP", c); this.config.notify(); return c;
   }
+  toolTitle(name: string) {
+    for (const c of this.list()) for (const t of c.tools) if (name === "external_" + createHash("sha256").update(t.id).digest("hex").slice(0, 24)) return `${c.name} · ${t.name}`;
+    return undefined;
+  }
   specs(assistant: AssistantProfile): FunctionTool[] {
     return this.list().filter(c => c.enabled).flatMap(c => c.tools.filter(t => t.enabled && t.readOnly && assistant.mcpToolIds.includes(t.id)).map(t => ({ name: "external_" + createHash("sha256").update(t.id).digest("hex").slice(0, 24), description: `${c.name}: ${t.description}`, inputSchema: t.inputSchema })));
   }

@@ -6,12 +6,13 @@ import { ReadTools, toolSpecs } from "./reader-tools.ts";
 import { invokeProvider, type FunctionTool } from "./ai-provider.ts";
 import type { AIConnection, ResearchMessage, AIContext } from "../shared/ai.ts";
 import type { AISettings, Turn, LearningNote, Source } from "../shared/types.ts";
-import { serveToolBroker } from "./ai-tool-broker.ts";
+import { serveToolBroker, toolTitles } from "./ai-tool-broker.ts";
 
 export type AIWorker = Pick<Codex, "thread" | "run" | "shutdown">;
 export type RuntimeEvent = Parameters<Codex["run"]>[3];
 export interface ToolBroker {
   specs: FunctionTool[];
+  label?(name: string): string;
   call(name: string, args: Record<string, unknown>, id: string, signal: AbortSignal): Promise<{ text: string; sources?: Source[]; images?: string[] }>;
 }
 export class AIRuntime {
@@ -70,7 +71,7 @@ class NativeWorker implements AIWorker {
         let toolImages: string[] = [];
         for (const call of r.toolCalls) {
           signal.throwIfAborted();
-          const activity = { id: call.id, kind: "course" as const, title: call.name, detail: "", state: "running" as const };
+          const activity = { id: call.id, kind: "course" as const, title: this.broker?.label?.(call.name) || toolTitles[call.name] || call.name, detail: "", state: "running" as const };
           onEvent({ activity });
           try {
             if (!specs.some(s => s.name === call.name)) throw Error("工具未获得当前助手授权");
@@ -84,7 +85,7 @@ class NativeWorker implements AIWorker {
             else throw Error("工具不可用");
             messages.push({ role: "tool", toolCallId: call.id, text: result.text });
             if (!this.settings.textOnly) toolImages.push(...(result.images || []));
-            onEvent({ sources: result.sources, activity: { ...activity, state: "completed", detail: result.text.slice(0, 240) } });
+            onEvent({ sources: result.sources, activity: { ...activity, state: "completed", detail: result.sources?.length ? `返回 ${result.sources.length} 处来源` : "已完成" } });
           } catch (e) {
             if (signal.aborted) throw e;
             const error = e instanceof Error ? e.message : "工具失败";
