@@ -443,7 +443,7 @@ export function MaterialsWorkspace({
                 })
               }
             >
-              撤销最近移除
+              撤销，放回最近列表
             </button>
           )}
           {r.documents.filter(doc => matches(doc.id)).map((doc) => (
@@ -468,7 +468,7 @@ export function MaterialsWorkspace({
                 <strong>{doc.name}</strong>
                 <small>
                   {doc.pages} 页 · {doc.sourceFormat?.toUpperCase() || "PDF"}
-                  {doc.hiddenRecent ? " · 已从最近移除" : ""}
+                  {doc.hiddenRecent ? " · 不在最近列表" : ""}
                 </small>
               </button>
               <details className="popover"><summary aria-label={`资料操作 ${doc.name}`}><Icon name="more" size={18} /></summary><div className="popover-panel"><button
@@ -484,7 +484,7 @@ export function MaterialsWorkspace({
                   })
                 }
               >
-                最近移除
+                从最近列表移除
               </button>
               <button
                 disabled={busy}
