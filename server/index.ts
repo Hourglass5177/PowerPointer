@@ -437,7 +437,7 @@ app.patch("/api/documents/:id", (req, res) => {
   const s = z
     .object({
       page: z.number().int().min(1).max(d.pages),
-      rotation: z.number().int().min(0).max(270),
+      rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
       zoom: z.number().min(0).max(4),
       fitMode: z.enum(["page", "width", "custom"]).optional(),
     })
@@ -477,7 +477,14 @@ app.get("/api/documents/:id/render", async (req, res) => {
     .refine((v) => [0, 90, 180, 270].includes(v))
     .parse(req.query.rotation || 0);
   const area = req.query.rect
-    ? rect.parse(JSON.parse(String(req.query.rect)))
+    ? z.string().transform((v, ctx) => {
+        try {
+          return JSON.parse(v) as unknown;
+        } catch {
+          ctx.addIssue({ code: "custom", message: "rect 不是有效 JSON" });
+          return z.NEVER;
+        }
+      }).pipe(rect).parse(String(req.query.rect))
     : undefined;
   res
     .type("png")
@@ -984,6 +991,9 @@ app.post("/api/auth/login", async (_req, res) => {
   const r = await ai.rpc("account/login/start", { type: "chatgpt" });
   res.json({ url: r.authUrl });
 });
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "接口不存在" });
+});
 app.use(
   "/pdf-assets",
   express.static(pdfAssets, { dotfiles: "deny", index: false }),
@@ -997,10 +1007,18 @@ app.use(
     res: express.Response,
     _next: express.NextFunction,
   ) => {
-    res.status(err.status === 409 ? 409 : 400).json({
-      code: err.code,
+    // Runtime messages can name local paths or be raw English, so these never reach the page.
+    const missing = err.code === "ENOENT";
+    res.status(err.status === 409 ? 409 : missing ? 404 : 400).json({
+      code: missing ? undefined : err.code,
       error: redact(
-        err instanceof z.ZodError ? "请求参数无效" : err.message || String(err),
+        missing
+          ? "文件不存在"
+          : err.code === "LIMIT_FILE_SIZE"
+            ? "课件超过 100 MB 上限"
+            : err instanceof z.ZodError || err.type === "entity.parse.failed"
+              ? "请求参数无效"
+              : err.message || String(err),
       ),
     });
   },
