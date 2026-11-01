@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { panViewportUpdate, zoomViewport, type MindMapPan } from "./mindMapViewport.ts";
 import type { Reader } from "./useReader.ts";
 import type { AISettings, Document, MindMap, MindMapNode, MindMapScope } from "../shared/types.ts";
 import {
@@ -107,7 +108,7 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
   const past = useRef<MindMap[]>([]), future = useRef<MindMap[]>([]);
   const serverVersions = useRef(new Map<string, number>()), editVersions = useRef(new Map<string, number>()), dirty = useRef(new Set<string>());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), saveQueue = persistenceQueue;
-  const pan = useRef<{ pointerId: number; clientX: number; clientY: number; x: number; y: number } | undefined>(undefined);
+  const pan = useRef<MindMapPan | undefined>(undefined);
   const drag = useRef<{ pointerId: number; id: string; clientX: number; clientY: number; origin: MindMapPosition; before: MindMap; base: MindMap } | undefined>(undefined);
   const latestSave = useRef<(map: MindMap) => Promise<unknown>>(async () => {});
   const [outline, setOutline] = useState(false);
@@ -436,6 +437,9 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
     }) } : current;
     drag.current = { pointerId: event.pointerId, id: node.id, clientX: event.clientX, clientY: event.clientY, origin, before: current, base };
   };
+  const endPan = (event: React.PointerEvent) => {
+    if (pan.current?.pointerId === event.pointerId) pan.current = undefined;
+  };
 
   if (!target) return <main className="mind-map-workspace"><div className="workspace-empty"><h1>思维导图</h1><p>先打开一份课件，或创建包含课件的课程。</p><button onClick={() => r.setWorkspaceView("materials")}>打开资料</button></div></main>;
 
@@ -502,15 +506,16 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
           pan.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, x: viewport.x, y: viewport.y }; setSelectedId("");
         }}
         onPointerMove={event => {
-          if (!pan.current || pan.current.pointerId !== event.pointerId) return;
-          setViewport(current => ({ ...current, x: pan.current!.x + event.clientX - pan.current!.clientX, y: pan.current!.y + event.clientY - pan.current!.clientY }));
+          const update = panViewportUpdate(pan, event);
+          if (update) setViewport(update);
         }}
-        onPointerUp={event => { if (pan.current?.pointerId === event.pointerId) pan.current = undefined; }}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
+        onLostPointerCapture={endPan}
         onWheel={event => {
           event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect();
-          const next = Math.max(0.2, Math.min(2.5, viewport.zoom * Math.exp(-event.deltaY * 0.0012)));
-          const worldX = (event.clientX - rect.left - viewport.x) / viewport.zoom, worldY = (event.clientY - rect.top - viewport.y) / viewport.zoom;
-          setViewport({ zoom: next, x: event.clientX - rect.left - worldX * next, y: event.clientY - rect.top - worldY * next });
+          const point = { x: event.clientX - rect.left, y: event.clientY - rect.top }, deltaY = event.deltaY;
+          setViewport(current => zoomViewport(current, point, deltaY));
         }}>
         <div className="mind-map-canvas-tools">
           <Tool icon="center" title="适合画布" onClick={fitView} />
