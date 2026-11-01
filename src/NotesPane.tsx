@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { LearningNote, Rect } from "../shared/types.ts";
 import { noteInDocument } from "../shared/learning.ts";
+import { plainPreview } from "../shared/markdown.ts";
 import type { NotesController } from "./useNotes.ts";
 import type { Reader } from "./useReader.ts";
 import { RichAnswer } from "./RichAnswer.tsx";
@@ -94,7 +95,7 @@ export function NotesPane({ notes: n, r, onNavigate }: { notes: NotesController;
       <label className="notes-search"><Icon name="search" size={16} /><input aria-label="搜索笔记" placeholder="搜索标题或正文" value={n.query} onChange={e => n.setQuery(e.target.value)} /></label>
       {n.deleted && <p className="muted notes-caption">已删除笔记 · 打开后可恢复</p>}
       {n.error && <p className="turn-error" role="alert">{n.error}<button onClick={() => r.guard(n.reload)}>重试</button></p>}
-      <div className="notes-list">{list.map(note => <button className="note-list-item" key={note.id} onClick={() => n.setSelected(note.id)}><strong>{note.title || "无标题笔记"}</strong><p>{note.text.replace(/[#>*`]/g, "").slice(0, 100) || "开始记录你的理解"}</p><small>{note.anchor ? `第 ${note.anchor.page} 页 · ` : ""}{note.originTurnId ? "AI 回答收藏" : "阅读笔记"}{note.documentId && !r.documents.some(d => d.id === note.documentId) ? " · 来源已删除" : ""}</small></button>)}
+      <div className="notes-list">{list.map(note => <button className="note-list-item" key={note.id} onClick={() => n.setSelected(note.id)}><strong>{note.title || "无标题笔记"}</strong><p>{plainPreview(note.text) || "开始记录你的理解"}</p><small>{note.anchor ? `第 ${note.anchor.page} 页 · ` : ""}{note.originTurnId ? "AI 回答收藏" : "阅读笔记"}{note.documentId && !r.documents.some(d => d.id === note.documentId) ? " · 来源已删除" : ""}</small></button>)}
       {!list.length && <div className="notes-empty"><Icon name="edit" size={26} /><h3>{n.loading ? "正在载入笔记…" : n.query ? "没有匹配的笔记" : n.deleted ? "暂无已删除笔记" : "把理解留在这一页"}</h3><p>{n.query ? "试试其他关键词。" : "选一段文字、框选图表，或收藏回答。也可以直接写一条笔记。"}</p>{!n.query && !n.deleted && <button onClick={() => r.guard(() => n.create())}>写第一条笔记</button>}</div>}</div>
     </>}
   </section>;
