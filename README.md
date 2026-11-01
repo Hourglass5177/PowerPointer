@@ -11,10 +11,9 @@ Windows 本地课件阅读助手。直接打开 PDF、PPT、PPTX，提供独立�
 3. 翻到要问的页，输入“这一步为什么成立”，按 **Enter** 或发送按钮；**Shift+Enter** 换行，Ctrl+Enter 也可发送。中文输入法选词时 Enter 不发送。
 4. 选字或框选后显示“弹窗解释／记笔记／对话引用”。选取本身不调用 AI；对话引用在发送时才调用 AI。文字、右侧回答和解释窗回答均可右键“弹窗解释”，继续深入。
 
-依赖：Windows、Node.js 24+；使用 Codex 订阅时需要官方 Codex CLI。PPT 导入还需本机安装 Microsoft PowerPoint 或 LibreOffice，两者均已在当前机器检测并验证。软件不会自动安装 Office 或调用在线转换网站。手动启动：
+依赖：Windows、Node.js 24+；使用 Codex 订阅时需要官方 Codex CLI。PPT 导入还需本机安装 Microsoft PowerPoint 或 LibreOffice，有其中一种即可，应用会自动检测。软件不会自动安装 Office 或调用在线转换网站。手动启动（在项目目录下运行）：
 
 ```powershell
-Set-Location -LiteralPath 'E:\大学\AI课件阅读器'
 npm ci
 npm run build
 npm start
@@ -92,7 +91,7 @@ npm start
 
 `data/library.sqlite` 保存资料索引、阅读位置、会话、问答、笔记和导入任务；`data/originals` 保存原始副本，`data/pdfs` 保存阅读缓存，`data/attachments` 保存已发送页面、裁图和框选笔记图片。旧版全文索引迁移前备份为 `data/before-power-pointer-v2.sqlite`，本次笔记与章节迁移前备份为 `data/before-learning-v3.sqlite`；旧记录无需重建，也不会自动重跑 AI。未关闭的解释窗及冻结背景保存在数据库中，原文件不修改。可用 `LECTURE_DATA_DIR` 设置本地数据目录。
 
-Codex 的令牌与线程继续保存在其托管目录（本机 `F:\Tools\OpenAI\CodexHome`；由 `CODEX_HOME` 或本地路径配置决定）。完整迁移会话需要保留该托管状态，单独备份应用数据库并不能保证模型线程可恢复。停机后备份 `data`；不要把它或本机路径配置提交到 Git。
+Codex 的令牌与线程继续保存在其托管目录（由 `CODEX_HOME` 或本地路径配置决定）。完整迁移会话需要保留该托管状态，单独备份应用数据库并不能保证模型线程可恢复。停机后备份 `data`；不要把它或本机路径配置提交到 Git。
 
 输入框中的“设置”可分别设置以下只读能力，下一次提问生效：
 
@@ -103,9 +102,9 @@ Codex 的令牌与线程继续保存在其托管目录（本机 `F:\Tools\OpenAI
 
 ## 限制与验证
 
-本次章节整理、阅读笔记和首次使用改进：53 项自动测试及生产构建通过；使用独立数据目录完成 5 页示例的真实 AI 整理与递归解释收藏，并检查 1600、1440、1024、520px 布局。见 [本次检查记录](output/improvement-20261022/检查记录.md)。
+当前 89 项自动测试及生产构建通过，最近一次完整试用的结果见 [验证记录](验证记录.md)。
 
-本次全局 UI 改版的状态与浏览器验收见 [界面改版验收](界面改版验收.md)。点读、课程与多窗口升级：33 项自动测试通过，生产构建通过；真实调用和浏览器检查详见 [Power Pointer 升级验收](PowerPointer升级验收.md)。
+全局 UI 改版的状态与浏览器验收见 [界面改版验收](界面改版验收.md)；点读、课程与多窗口升级的真实调用和浏览器检查见 [Power Pointer 升级验收](PowerPointer升级验收.md)。
 
 已使用导入的 90 页 `0Lecture 1-lg-0320.pptx` 完成五轮真实学习流程：模型切换、联网核对、跨页图像查阅、框选问答、引用跳页及导出。详细问题、回答质量核对和修复记录见 [PowerPointer 实课验收](PowerPointer实课验收.md)。
 
@@ -113,7 +112,7 @@ Codex 的令牌与线程继续保存在其托管目录（本机 `F:\Tools\OpenAI
 - 扫描页可直接视觉问答；无文字层的页不能参与原文文字检索，不自动 OCR。主动生成课程总览时会读取这些页面的图像；本地索引覆盖率与 AI 已读页数分别显示。
 - 面向桌面浏览器，本轮检查 1920、1440、1024 和 520px 宽度，较窄窗口使用单面板切换。没有安装包、云同步、多用户与原生手机应用。
 - 单次生成等待上限 5 分钟；服务失败、限制或断开会明确显示，未确认的结果需要主动处理。AI 解释与引用仍需人工核对。
-- 已验证 Node `24.15.0`、npm `11.12.1`、React `19.3.0`、Vite `7.3.7`、PDF.js `5.7.284`；完整版本由 `package-lock.json` 锁定。
+- 已验证 Node `24.16.0`、npm `11.13.0`、React `19.3.0`、Vite `7.3.7`、PDF.js `5.7.284`；完整版本由 `package-lock.json` 锁定。
 
 PowerPoint 实测版本 `16.0.20430.20146`，LibreOffice `26.2.4.2`。`samples` 包含 PDF、PPTX 和旧版 PPT 样例，其中演示文稿第三页为隐藏页。
 
