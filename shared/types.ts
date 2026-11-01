@@ -303,6 +303,45 @@ export interface LearningNote {
   originKind?: "turn" | "readingTurn";
   anchor?: SelectionRef;
 }
+export type MindMapScope = "course" | "document";
+export interface MindMapNodeSource {
+  documentId: string;
+  documentName?: string;
+  page: number;
+}
+export interface MindMapNode {
+  id: string;
+  parentId?: string;
+  text: string;
+  note?: string;
+  color?: string;
+  collapsed?: boolean;
+  x?: number;
+  y?: number;
+  side?: "left" | "right";
+  source?: MindMapNodeSource;
+  link?: string;
+}
+export interface MindMap {
+  id: string;
+  scope: MindMapScope;
+  courseId?: string;
+  documentId?: string;
+  title: string;
+  rootId: string;
+  nodes: MindMapNode[];
+  layout: "tree" | "free";
+  theme: "paper" | "colorful" | "mono";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  generatedAt?: string;
+  generatedWith?: {
+    connectionId?: string;
+    model?: string;
+    focus?: string;
+  };
+}
 export const activeStates: TurnState[] = ["preparing", "generating"];
 export const stateLabels: Record<TurnState, string> = {
   preparing: "准备上下文",
