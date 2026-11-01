@@ -25,9 +25,9 @@ type Result = Awaited<ReturnType<ToolBroker["call"]>>;
 export class ResearchTools implements ToolBroker {
   specs: FunctionTool[];
   private reader?: ReadTools;
-  constructor(private run: ResearchRun, private external: ExternalServices, private artifacts: ArtifactStore, private save: () => void, private beforeCall?: () => void) {
+  constructor(private run: ResearchRun, private external: ExternalServices, private artifacts: ArtifactStore, private save: () => void, private beforeCall?: () => void, private readerContext: { contextSnapshotId?: string; extraPages?: number[] } = {}) {
     const a = run.assistant;
-    if (a.tools.includes("course") && run.settings.agentTools !== false) this.reader = new ReadTools(external.config.store.dir, { documentId: run.documentId, documentIds: run.context.documentIds, page: run.page, scope: run.scope, extraPages: [], textOnly: run.settings.textOnly });
+    if (a.tools.includes("course") && run.settings.agentTools !== false) this.reader = new ReadTools(external.config.store.dir, { documentId: run.documentId, documentIds: run.context.documentIds, page: run.page, scope: run.scope, extraPages: readerContext.extraPages || [], contextSnapshotId: readerContext.contextSnapshotId, textOnly: run.settings.textOnly });
     this.specs = [
       ...(this.reader ? toolSpecs : []),
       ...specs.filter(s => s.name.includes("artifact") ? run.settings.agentTools !== false && a.tools.includes("artifacts") : s.name.includes("note") ? run.settings.agentTools !== false && a.tools.includes("notes") : a.tools.includes("web") && !!run.settings.webSearch && (s.name === "read_web" || external.web().enabled && external.web().hasKey)),
@@ -59,7 +59,8 @@ export class ResearchTools implements ToolBroker {
     try {
       let result: Result;
       if (toolSpecs.some(s => s.name === name) && this.reader) {
-        if (name === "search_history") {
+        // Explanation windows search their frozen snapshot, not the window's own turns.
+        if (name === "search_history" && !this.readerContext.contextSnapshotId) {
           const { query } = z.object({ query: z.string().max(1000) }).parse(args);
           const matches = this.run.context.history.filter(h => `${h.question}\n${h.answer}`.toLowerCase().includes(query.toLowerCase())).slice(-6);
           result = { text: JSON.stringify({ history: matches, note: "任务创建时冻结的讨论背景，完整原记录仍保留" }) };

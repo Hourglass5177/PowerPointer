@@ -761,7 +761,7 @@ async function execute(t: Turn, reuse = false) {
     workspaceTask = { id: t.id, courseId: s.courseId, documentId: d.id, page: s.page, scope: s.scope, title: t.question.slice(0, 70), goal: t.question, settings: { ...resolved.settings, assistantSnapshot: s.assistantSnapshot }, assistant: s.assistantSnapshot, context: s.aiContext, state: "running", mode: "research", steps: [], messages: [], answer: "", sources: s.sources, artifactIds: store.all<import("../shared/ai.ts").ResearchArtifact>("aiArtifact").filter(a => a.runId === t.id).map(a => a.id), calls: 0, callLimit: 20, elapsedMs: 0, timeLimitMs: 15 * 60000, createdAt: now, updatedAt: now };
     if (s.agentTools !== false || s.webSearch) broker = new ResearchTools(workspaceTask, external, artifacts, () => {
       if (workspaceTask!.artifactIds.length) { store.put("aiResearch", workspaceTask!); events.emit("research"); }
-    });
+    }, undefined, { contextSnapshotId: s.contextSnapshotId, extraPages: s.extraPages });
     worker = runtime.worker(resolved.connection, options, { ...resolved.settings, assistantSnapshot: s.assistantSnapshot }, broker);
     update(t);
     try {
