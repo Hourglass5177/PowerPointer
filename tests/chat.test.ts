@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { Store } from "../server/store.ts";
 import { ChatService } from "../server/chat.ts";
 import { DraftStore } from "../shared/drafts.ts";
-import { sourceMap, citedSources, portableAnswer } from "../shared/chat.ts";
+import { sourceMap, citedSources, portableAnswer, deletedSources } from "../shared/chat.ts";
 import { ReadTools } from "../server/reader-tools.ts";
 import type {
   Conversation,
@@ -400,4 +400,9 @@ test("保存的探索历史创建分支时仅携带目标之前的记录", async
   } finally {
     f.close();
   }
+});
+
+test("历史筛选列出已删除的来源，名称去重，现存课件不重复", () => {
+  const conv = (documentId: string, documentName?: string) => ({ documentId, documentName }) as Conversation;
+  assert.deepEqual(deletedSources([conv("gone", "旧课件.pdf"), conv("gone", "旧课件.pdf"), conv("kept", "现存.pdf"), conv("nameless")], [{ id: "kept" }]), [{ id: "gone", name: "旧课件.pdf" }, { id: "nameless", name: "未命名课件" }]);
 });

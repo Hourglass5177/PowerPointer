@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Reader } from "./useReader.ts";
 import { api } from "./api.ts";
 import type { Conversation, Turn } from "../shared/types.ts";
-import { sourceMap } from "../shared/chat.ts";
+import { deletedSources, sourceMap } from "../shared/chat.ts";
 import { RichAnswer } from "./RichAnswer.tsx";
 export function HistoryWorkspace({ r }: { r: Reader }) {
   const [busy, setBusy] = useState(false),
@@ -12,7 +12,17 @@ export function HistoryWorkspace({ r }: { r: Reader }) {
     [query, setQuery] = useState(""),
     [historyCourse, setHistoryCourse] = useState(r.courseId),
     [historyDoc, setHistoryDoc] = useState(""),
-    [view, setView] = useState<{ conversation: Conversation; turns: Turn[] }>();
+    [view, setView] = useState<{ conversation: Conversation; turns: Turn[] }>(),
+    [removed, setRemoved] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void api<Conversation[]>("/conversations")
+      .then((all) => !cancelled && setRemoved(deletedSources(all, r.documents)))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [r.documents]);
   const perform = async (fn: () => Promise<void>) => {
     setBusy(true);
     setMessage("");
@@ -109,6 +119,11 @@ export function HistoryWorkspace({ r }: { r: Reader }) {
               {d.name}
             </option>
           ))}
+          {removed.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}（来源已删除）
+            </option>
+          ))}
         </select>
       </div>
       {history
@@ -132,6 +147,11 @@ export function HistoryWorkspace({ r }: { r: Reader }) {
                   c.documentName ||
                   r.documents.find((d) => d.id === c.documentId)?.name ||
                   "来源已删除"}
+                {c.documentName &&
+                !c.courseId &&
+                !r.documents.some((d) => d.id === c.documentId)
+                  ? " · 来源已删除"
+                  : ""}
                 {c.archived ? " · 已归档" : ""}
               </small>
             </button>
@@ -139,6 +159,11 @@ export function HistoryWorkspace({ r }: { r: Reader }) {
               disabled={
                 busy ||
                 (!r.documents.some((d) => d.id === c.documentId) && !c.courseId)
+              }
+              title={
+                !r.documents.some((d) => d.id === c.documentId) && !c.courseId
+                  ? "来源已删除，记录可以查看，但不能继续提问"
+                  : undefined
               }
               onClick={() => void perform(() => continueChat(c))}
             >

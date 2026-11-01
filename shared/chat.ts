@@ -1,4 +1,4 @@
-import type { Source, Turn } from "./types.ts";
+import type { Conversation, Source, Turn } from "./types.ts";
 
 export function sourceMap(turns: Turn[], documentId?: string) {
   return new Map(
@@ -30,6 +30,16 @@ export function portableAnswer(
         : label;
     },
   );
+}
+export function deletedSources(
+  conversations: Pick<Conversation, "documentId" | "documentName">[],
+  documents: { id: string }[],
+) {
+  const deleted = new Map<string, string>();
+  for (const c of conversations)
+    if (!documents.some((d) => d.id === c.documentId))
+      deleted.set(c.documentId, c.documentName || deleted.get(c.documentId) || "未命名课件");
+  return [...deleted].map(([id, name]) => ({ id, name }));
 }
 export function autoTitle(question: string) {
   return question.replace(/\s+/g, " ").trim().slice(0, 26) || "新会话";
