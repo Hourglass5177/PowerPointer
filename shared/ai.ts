@@ -73,7 +73,7 @@ export interface AIUsage {
   connectionId: string;
   model: string;
   taskId?: string;
-  taskKind: "chat" | "reading" | "knowledge" | "research" | "comparison" | "test";
+  taskKind: "chat" | "reading" | "knowledge" | "mindmap" | "research" | "comparison" | "test";
   input?: number;
   output?: number;
   total?: number;

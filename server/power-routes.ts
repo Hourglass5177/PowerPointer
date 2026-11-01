@@ -10,6 +10,7 @@ import type { CourseService } from "./courses.ts";
 import type { ReadingService } from "./reading.ts";
 import type { KnowledgeService } from "./knowledge.ts";
 import type { Lifecycle } from "./lifecycle.ts";
+import type { MindMapService, MindMapTarget } from "./mind-maps.ts";
 import { NotesService, type NoteInput } from "./notes.ts";
 import {
   type Conversation,
@@ -72,8 +73,9 @@ export function powerRoutes(
     courses: CourseService;
     reading: ReadingService;
     knowledge: KnowledgeService;
+    mindMaps: MindMapService;
     lifecycle: Lifecycle;
-    resolveSettings?: (settings: AISettings) => Promise<AISettings>;
+    resolveSettings?: (settings: AISettings, vision?: boolean) => Promise<AISettings>;
     render: (
       id: string,
       page: number,
@@ -83,10 +85,33 @@ export function powerRoutes(
     notify: () => void;
   },
 ) {
-  const { store, courses, reading, knowledge, lifecycle, render, notify } =
+  const { store, courses, reading, knowledge, mindMaps, lifecycle, render, notify } =
     services;
   const notes = new NotesService(store, notify);
   const noteSchema = z.object({ id: id.optional(), courseId: id.optional(), documentId: documentId.optional(), title: z.string().max(200).optional(), text: z.string().max(200000).optional(), anchor: selectionSchema.optional(), turnId: id.optional(), originKind: z.enum(["turn", "readingTurn"]).optional() });
+  const mindMapTargetSchema = z.object({
+    scope: z.enum(["course", "document"]),
+    courseId: id.optional(),
+    documentId: documentId.optional(),
+  }).superRefine((value, context) => {
+    if (value.scope === "course" && (!value.courseId || value.documentId))
+      context.addIssue({ code: "custom", message: "课程导图范围无效" });
+    if (value.scope === "document" && !value.documentId)
+      context.addIssue({ code: "custom", message: "请选择课件" });
+  });
+  const mindMapNodeSchema = z.object({
+    id,
+    parentId: id.optional(),
+    text: z.string().trim().min(1).max(160),
+    note: z.string().max(4000).optional(),
+    color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
+    collapsed: z.boolean().optional(),
+    x: z.number().finite().min(-1000000).max(1000000).optional(),
+    y: z.number().finite().min(-1000000).max(1000000).optional(),
+    side: z.enum(["left", "right"]).optional(),
+    source: z.object({ documentId, documentName: z.string().max(300).optional(), page: z.number().int().positive() }).optional(),
+    link: z.string().trim().max(2000).refine(value => !value || /^https?:\/\//i.test(value), "链接必须使用 http 或 https").optional(),
+  });
   const createNote = async (input: NoteInput) => {
     const anchor = input.anchor;
     if (input.turnId || anchor?.kind !== "rectangle" || (input.id && store.get("note", input.id))) return notes.create(input);
@@ -281,6 +306,60 @@ export function powerRoutes(
     const body = aiSettingsSchema.extend({ documentIds: z.array(documentId).min(1).max(2000).optional(), overviewOnly: z.boolean().optional(), force: z.boolean().optional() }).parse(req.body || {});
     const settings = services.resolveSettings ? await services.resolveSettings(aiSettingsSchema.parse(body)) : aiSettingsSchema.parse(body);
     res.json(knowledge.start(req.params.id, settings, body));
+  });
+  app.get("/api/mind-maps", (req, res) => {
+    const target = mindMapTargetSchema.parse({
+      scope: req.query.scope,
+      courseId: req.query.courseId || undefined,
+      documentId: req.query.documentId || undefined,
+    }) as MindMapTarget;
+    res.json(mindMaps.list(target));
+  });
+  app.post("/api/mind-maps", (req, res) => {
+    const body = mindMapTargetSchema.safeExtend({
+      title: z.string().trim().min(1).max(200).optional(),
+      imported: z.object({ rootId: id, nodes: z.array(mindMapNodeSchema).min(1).max(300), layout: z.enum(["tree", "free"]), theme: z.enum(["paper", "colorful", "mono"]) }).optional(),
+    }).parse(req.body);
+    res.json(store.transaction(() => {
+      const created = mindMaps.create(body, body.title);
+      return body.imported ? mindMaps.update(created.id, created.version, body.imported) : created;
+    }));
+  });
+  app.put("/api/mind-maps/:id", (req, res) => {
+    const body = z.object({
+      expectedVersion: z.number().int().positive(),
+      rootId: id.optional(),
+      title: z.string().trim().min(1).max(200).optional(),
+      nodes: z.array(mindMapNodeSchema).min(1).max(300).optional(),
+      layout: z.enum(["tree", "free"]).optional(),
+      theme: z.enum(["paper", "colorful", "mono"]).optional(),
+    }).parse(req.body);
+    const { expectedVersion, ...patch } = body;
+    res.json(mindMaps.update(req.params.id, expectedVersion, patch));
+  });
+  app.delete("/api/mind-maps/:id", (req, res) =>
+    res.json(mindMaps.remove(req.params.id)),
+  );
+  app.post("/api/mind-maps/generate", async (req, res) => {
+    const body = mindMapTargetSchema.safeExtend({
+      mapId: id.optional(),
+      expectedVersion: z.number().int().positive().optional(),
+      focus: z.string().trim().max(500).optional(),
+    }).and(aiSettingsSchema).parse(req.body || {});
+    const controller = new AbortController();
+    res.on("close", () => { if (!res.writableEnded) controller.abort(); });
+    const settingsInput = aiSettingsSchema.parse(body);
+    const settings = services.resolveSettings
+      ? await services.resolveSettings(settingsInput, false)
+      : settingsInput;
+    res.json(await mindMaps.generate({
+      mapId: body.mapId,
+      expectedVersion: body.expectedVersion,
+      focus: body.focus,
+      target: body,
+      settings,
+      signal: controller.signal,
+    }));
   });
   app.post("/api/knowledge/:id/cancel", (req, res) =>
     res.json(knowledge.cancel(req.params.id)),
