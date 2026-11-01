@@ -61,6 +61,16 @@ test("解释窗工具检索创建时冻结的讨论，并可查阅用户附加�
   } finally { await f.close(); }
 });
 
+test("生成中停止时返回中文说明，不暴露底层中止错误", async () => {
+  let started!: () => void; const streaming = new Promise<void>(resolve => started = resolve);
+  const s = await server((_b, _q, res) => { res.writeHead(200, { "Content-Type": "text/event-stream" }); res.write(`data: {"choices":[{"delta":{"content":"部分"}}]}\n\n`); started(); });
+  try {
+    const c = new AbortController(), running = invokeProvider(connection(s.url), "", { model: "fixture", system: "", messages: [], signal: c.signal });
+    await streaming; await new Promise(resolve => setTimeout(resolve, 30)); c.abort();
+    await assert.rejects(running, (e: Error) => e.message === "已停止");
+  } finally { await s.close(); }
+});
+
 test("预设服务的已有模型未填强度时使用官方列表，用户填写和未确认能力不受影响", async () => {
   const f = fixture();
   try {
