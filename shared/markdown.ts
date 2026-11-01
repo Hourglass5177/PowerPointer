@@ -1,3 +1,19 @@
+/** One-line readable text for note lists; hides markup and internal source links. */
+export function plainPreview(text: string, limit = 100) {
+  const plain = text
+    .replace(/^[ \t]*(`{3,}|~{3,}).*$/gm, "")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*(\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*$/gm, "")
+    .replace(/^[ \t]*(#{1,6}[ \t]+|>[ \t]?|[-*+][ \t]+|\d+[.)][ \t]+)/gm, "")
+    .replace(/\*\*|__|`/g, "")
+    .replace(/\$\$|\|/g, " ")
+    .replace(/(?<=\s|^)\$([^$\n]+)\$/g, "$1")
+    .replace(/\s+/g, " ")
+    .replace(/\s+([，。；：！？、）】])/g, "$1")
+    .trim();
+  return plain.length > limit ? plain.slice(0, limit) + "…" : plain;
+}
 /** Normalize model math delimiters and CJK emphasis without rewriting code. */
 export function answerMarkdown(text: string) {
   const code =

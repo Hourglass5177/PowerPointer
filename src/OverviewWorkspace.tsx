@@ -10,6 +10,7 @@ import { CourseImports } from "./CourseImports.tsx";
 import { requestOpenNote } from "./useNotes.ts";
 import { ModelSelect, selectedModel, ProfileButtons } from "./AIControls.tsx";
 import { defaultEffort, modelEfforts } from "../shared/ai.ts";
+import { plainPreview } from "../shared/markdown.ts";
 
 export function OverviewWorkspace({ r, windows: w, onCreate }: { r: Reader; windows: ReadingWindows; onCreate: () => void }) {
   const course = r.course;
@@ -93,6 +94,6 @@ export function OverviewWorkspace({ r, windows: w, onCreate }: { r: Reader; wind
       {tab === "逐页要点" && <>{recent?.pages.length ? recent.pages.map(p => <details key={p.documentId + p.page}><summary>{r.documents.find(d => d.id === p.documentId)?.name || "来源已删除"} · 第 {p.page} 页{p.state === "failed" ? " · 失败" : ""}</summary>{p.error ? <p className="turn-error">{p.error}</p> : answer(p.summary || "", new Map(p.sources.map(s => [s.id, s])))}</details>) : <p className="muted">本次任务尚无页面要点；旧内容可以在历史版本中查看。</p>}</>}
       {tab === "历史版本" && <>{revisions.length ? <><select aria-label="历史整理版本" value={historyRevision?.id || ""} onChange={e => setHistory(e.target.value)}>{[...revisions].reverse().map(k => <option key={k.id} value={k.id}>{new Date(k.createdAt).toLocaleString("zh-CN")} · {k.documentIds.length} 章 · {k.settings.model || "历史模型"}</option>)}</select>{historyRevision && <><p className="muted">保留的历史结果。来源变更后不会自动重新分析。</p>{historyRevision.summary && answer(historyRevision.summary, sources(historyRevision))}{historyRevision.chapters.filter(c => c.summary).map(c => <details key={c.documentId}><summary>{r.documents.find(d => d.id === c.documentId)?.name || "来源已删除"}</summary>{answer(c.summary, sources(historyRevision))}</details>)}</>}</> : <p className="muted">暂无历史整理。</p>}</>}
     </section>
-    {!!notes.length && <section className="recent-notes"><div className="section-title"><h2>最近笔记</h2><span>{notes.length} 条</span></div>{notes.slice(0, 3).map(n => <button key={n.id} onClick={() => requestOpenNote(n.id)}><Icon name="edit" size={17} /><span><strong>{n.title}</strong><small>{n.text.replace(/[#>*`]/g, "").slice(0, 80)}</small></span><Icon name="right" size={16} /></button>)}</section>}
+    {!!notes.length && <section className="recent-notes"><div className="section-title"><h2>最近笔记</h2><span>{notes.length} 条</span></div>{notes.slice(0, 3).map(n => <button key={n.id} onClick={() => requestOpenNote(n.id)}><Icon name="edit" size={17} /><span><strong>{n.title}</strong><small>{plainPreview(n.text, 80)}</small></span><Icon name="right" size={16} /></button>)}</section>}
   </main>;
 }
