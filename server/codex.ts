@@ -5,6 +5,7 @@ import {
 } from "node:child_process";
 import { createInterface } from "node:readline";
 import { EventEmitter } from "node:events";
+import { setTimeout as delay } from "node:timers/promises";
 import { mkdirSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -466,26 +467,39 @@ export class Codex extends EventEmitter {
       developerInstructions:
         "只分析附带课件资料和当前分支历史。仅使用明确授权的只读工具。",
     };
+    const forkAt = async (boundary: { beforeTurnId: string } | { lastTurnId: string }) => {
+      const waits = [200, 500, 1000];
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await this.rpc("thread/fork", { ...params, ...boundary });
+        } catch (error) {
+          // A paginated fork can depend on an ancestor that is still being written.
+          // Refresh that persisted history without resuming/acquiring its writer.
+          const lag = /thread history projection for ([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}) is behind durable rollout/i.exec(String(error));
+          if (!lag) throw error;
+          if (attempt === waits.length)
+            throw new Error("阅读历史仍在同步，暂时无法创建分支。请稍后重试，原阅读记录和分支位置已保留。", { cause: error });
+          await delay(waits[attempt]);
+          // Reading is best-effort: the next fork remains the authority on whether
+          // the complete ancestry is ready. Never fork without the fixed boundary.
+          await this.rpc("thread/read", { threadId: lag[1], includeTurns: true }).catch(() => {});
+        }
+      }
+    };
     let result;
     try {
       if (!beforeTurnId && !previousTurnId)
         throw Error("缺少可靠的线程切分位置。");
-      result = await this.rpc("thread/fork", {
-        ...params,
-        ...(beforeTurnId ? { beforeTurnId } : { lastTurnId: previousTurnId }),
-      });
+      result = await forkAt(beforeTurnId ? { beforeTurnId } : { lastTurnId: previousTurnId! });
     } catch (error) {
       // Only a confirmed unsupported field permits the inclusive-boundary fallback.
       if (
-        !previousTurnId ||
+        !beforeTurnId || !previousTurnId ||
         !/beforeTurnId|before_turn_id/.test(String(error)) ||
         !/unknown|unsupported|unrecognized|experimental/i.test(String(error))
       )
         throw error;
-      result = await this.rpc("thread/fork", {
-        ...params,
-        lastTurnId: previousTurnId,
-      });
+      result = await forkAt({ lastTurnId: previousTurnId });
     }
     if (!result?.thread?.id || result.thread.id === threadId)
       throw Error("分支线程未创建，原会话未更改。");
