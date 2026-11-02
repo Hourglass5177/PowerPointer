@@ -193,6 +193,22 @@
 .root .mind-map-node-meta { color: #ffffffcc; }
 .mind-map-node-meta i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .mind-map-node-meta b { font-weight: 500; }
+.mind-map-node-meta button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 17px;
+  padding: 0 3px;
+  font-size: 9px;
+  line-height: 17px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.mind-map-node-meta button:hover { background: #315f6414; color: #244d51; }
+.mind-map-node.root .mind-map-node-meta button:hover { background: #ffffff26; color: white; }
+.mind-map-node-source { text-decoration: underline; text-underline-offset: 2px; }
 .mind-map-collapse {
   position: absolute;
   right: -11px;
@@ -262,6 +278,28 @@
 .mind-map-inspector textarea,
 .mind-map-inspector select { width: 100%; font-size: 12px; }
 .mind-map-inspector textarea { resize: vertical; }
+.mind-map-knowledge-card {
+  padding: 14px;
+  margin: 0 0 20px;
+  border: 1px solid #d5e0dd;
+  border-radius: 10px;
+  background: #f3f7f5;
+  overflow-wrap: anywhere;
+}
+.mind-map-knowledge-card > small { display: block; font-size: 11px; line-height: 1.6; color: #63736a; }
+.mind-map-knowledge-card h2 { margin: 5px 0 16px; font-size: 17px; line-height: 1.45; }
+.mind-map-knowledge-card h3 { margin: 0 0 6px; font-size: 12px; color: #315f64; }
+.mind-map-summary-text { margin: 0 0 12px; font-size: 13px; line-height: 1.8; white-space: pre-wrap; }
+.mind-map-summary-text.empty, .mind-map-source-hint { color: #7c8179; font-size: 12px; line-height: 1.7; }
+.mind-map-source-hint { margin: 12px 0 0; }
+.mind-map-knowledge-source { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid #d5e0dd; }
+.mind-map-knowledge-source > span { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; line-height: 1.6; }
+.mind-map-knowledge-source svg { flex: none; }
+.mind-map-knowledge-source button, .mind-map-link-current { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; font-size: 12px; }
+.mind-map-knowledge-source button { color: #fff; background: #315f64; }
+.mind-map-knowledge-source button:disabled { opacity: .5; }
+.mind-map-knowledge-source small { color: #995139; line-height: 1.6; }
+.mind-map-link-current { width: 100%; margin: -5px 0 14px; border: 1px solid #d4d0c8; }
 .mind-map-colors { border: 0; padding: 0; margin: 0 0 14px; display: flex; gap: 8px; }
 .mind-map-colors legend { color: #686861; font-size: 11px; margin-bottom: 7px; }
 .mind-map-colors button { width: 23px; height: 23px; padding: 0; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 1px #c9c6bf; }

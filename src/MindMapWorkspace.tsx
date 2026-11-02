@@ -10,6 +10,7 @@ import {
   mindMapBounds,
   mindMapChildren,
   mindMapDescendants,
+  mindMapNodeSummary,
   validateMindMapNodes,
   visibleMindMapNodes,
   type MindMapPosition,
@@ -51,22 +52,40 @@ function InlineNodeEditor({ node, onCommit, onClose }: { node: MindMapNode; onCo
   }} />;
 }
 
-function NodeInspector({ node, root, documents, childCount, nodes, onMove, onReorder, onPatch, onAddChild, onAddSibling, onDuplicate, onRemove, onNavigate }: {
+function NodeInspector({ node, root, documents, currentReadingDocument, panelRef, childCount, nodes, onMove, onReorder, onPatch, onAddChild, onAddSibling, onDuplicate, onRemove, onNavigate }: {
   node: MindMapNode; root: boolean; documents: Document[]; childCount: number;
+  currentReadingDocument?: Document;
+  panelRef: React.Ref<HTMLElement>;
   nodes: MindMapNode[]; onMove: (parentId: string) => void; onReorder: (direction: -1 | 1) => void;
   onPatch: (patch: Partial<MindMapNode>) => void; onAddChild: () => void; onAddSibling: () => void;
   onDuplicate: () => void; onRemove: () => void; onNavigate: () => void;
 }) {
-  const [text, setText] = useState(node.text), [note, setNote] = useState(node.note || ""), [link, setLink] = useState(node.link || ""), [page, setPage] = useState(String(node.source?.page || 1));
-  useEffect(() => { setText(node.text); setNote(node.note || ""); setLink(node.link || ""); setPage(String(node.source?.page || 1)); }, [node.id, node.text, node.note, node.link, node.source?.page]);
+  const [text, setText] = useState(node.text), [summary, setSummary] = useState(node.summary || ""), [note, setNote] = useState(node.note || ""), [link, setLink] = useState(node.link || ""), [page, setPage] = useState(String(node.source?.page || 1));
+  useEffect(() => { setText(node.text); setSummary(node.summary || ""); setNote(node.note || ""); setLink(node.link || ""); setPage(String(node.source?.page || 1)); }, [node.id, node.text, node.summary, node.note, node.link, node.source?.page]);
   const currentDocument = documents.find(document => document.id === node.source?.documentId);
   const descendants = mindMapDescendants(nodes, node.id);
-  return <aside className="mind-map-inspector" aria-label="节点属性">
+  const description = mindMapNodeSummary(node);
+  return <aside ref={panelRef} className="mind-map-inspector" aria-label="节点属性">
+    <section className="mind-map-knowledge-card" aria-label="知识点详情">
+      <small>{root ? "中心主题" : "知识点"}</small>
+      <h2>{node.text}</h2>
+      <h3>知识简介</h3>
+      <p className={`mind-map-summary-text ${description ? "" : "empty"}`}>{description || "还没有知识简介，可在下方填写，或在 AI 生成初稿时一同生成。"}</p>
+      {!node.summary && node.note && <small>此简介来自原节点备注，可在下方补充独立简介。</small>}
+      {node.source ? <div className="mind-map-knowledge-source">
+        <span><Icon name="slides" size={15} />{currentDocument?.name || node.source.documentName || "来源课件"}</span>
+        <button disabled={!currentDocument} onClick={onNavigate}><Icon name="open" size={15} />打开课件 · 第 {node.source.page} 页</button>
+        {!currentDocument && <small>来源课件已移除，请在下方重新关联。</small>}
+      </div> : <p className="mind-map-source-hint">尚未关联课件，可在下方选择对应 PPT 和页码。</p>}
+    </section>
     <div className="mind-map-inspector-heading"><strong>{root ? "中心主题" : "节点"}</strong><small>{childCount} 个子节点</small></div>
     <label>标题<textarea rows={2} value={text} maxLength={160} onChange={event => setText(event.target.value)} onBlur={() => {
       const value = text.trim(); if (value && value !== node.text) onPatch({ text: value }); else setText(node.text);
     }} /></label>
-    <label>备注<textarea rows={5} value={note} maxLength={4000} onChange={event => setNote(event.target.value)} onBlur={() => {
+    <label>知识简介<textarea aria-label="知识简介" rows={4} value={summary} maxLength={1200} placeholder="简要说明这个知识点是什么、关键条件和作用" onChange={event => setSummary(event.target.value)} onBlur={() => {
+      const value = summary.trim(); if (value !== (node.summary || "")) onPatch({ summary: value || undefined });
+    }} /></label>
+    <label>备注<textarea aria-label="备注" rows={5} value={note} maxLength={4000} onChange={event => setNote(event.target.value)} onBlur={() => {
       const value = note.trim(); if (value !== (node.note || "")) onPatch({ note: value || undefined });
     }} /></label>
     <fieldset className="mind-map-colors"><legend>分支颜色</legend>{MIND_MAP_COLORS.map(color => <button key={color} type="button" title={color} aria-label={`使用颜色 ${color}`} aria-pressed={(node.color || MIND_MAP_COLORS[0]) === color} style={{ background: color }} onClick={() => onPatch({ color })} />)}</fieldset>
@@ -76,7 +95,9 @@ function NodeInspector({ node, root, documents, childCount, nodes, onMove, onReo
       const document = documents.find(item => item.id === event.target.value);
       onPatch({ source: document ? { documentId: document.id, documentName: document.name, page: Math.min(node.source?.page || 1, document.pages) } : undefined });
     }}><option value="">无来源</option>{documents.map(document => <option key={document.id} value={document.id}>{document.name}</option>)}</select></label>
-    {node.source && !currentDocument && <p className="turn-error">来源课件已移除：{node.source.documentName || "原课件"}</p>}
+    {currentReadingDocument && <button className="mind-map-link-current" onClick={() => onPatch({ source: {
+      documentId: currentReadingDocument.id, documentName: currentReadingDocument.name, page: currentReadingDocument.page,
+    } })}><Icon name="slides" size={15} />关联当前阅读页（第 {currentReadingDocument.page} 页）</button>}
     {currentDocument && <div className="mind-map-source-row"><label>页码<input type="number" min={1} max={currentDocument.pages} value={page} onChange={event => setPage(event.target.value)} onBlur={() => {
       const value = Math.max(1, Math.min(currentDocument.pages, Number(page) || 1)); setPage(String(value));
       if (value !== node.source?.page) onPatch({ source: { ...node.source!, page: value } });
@@ -105,6 +126,7 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
   const [query, setQuery] = useState(""), [focus, setFocus] = useState(""), [settings, setSettings] = useState<AISettings>({});
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const stage = useRef<HTMLDivElement>(null), search = useRef<HTMLInputElement>(null), fileInput = useRef<HTMLInputElement>(null);
+  const inspectorPanel = useRef<HTMLElement>(null);
   const past = useRef<MindMap[]>([]), future = useRef<MindMap[]>([]);
   const serverVersions = useRef(new Map<string, number>()), editVersions = useRef(new Map<string, number>()), dirty = useRef(new Set<string>());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), saveQueue = persistenceQueue;
@@ -112,6 +134,10 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
   const drag = useRef<{ pointerId: number; id: string; clientX: number; clientY: number; origin: MindMapPosition; before: MindMap; base: MindMap } | undefined>(undefined);
   const latestSave = useRef<(map: MindMap) => Promise<unknown>>(async () => {});
   const [outline, setOutline] = useState(false);
+  const showNodeDetails = (id: string) => {
+    setSelectedId(id);
+    requestAnimationFrame(() => inspectorPanel.current?.scrollTo({ top: 0 }));
+  };
   const generationController = useRef<AbortController | undefined>(undefined);
   const fitLatest = useRef<() => void>(() => {});
 
@@ -250,7 +276,7 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
   const selected = map?.nodes.find(node => node.id === selectedId);
   const matches = useMemo(() => {
     const value = query.trim().toLocaleLowerCase();
-    return value && map ? map.nodes.filter(node => `${node.text}\n${node.note || ""}`.toLocaleLowerCase().includes(value)) : [];
+    return value && map ? map.nodes.filter(node => `${node.text}\n${node.summary || ""}\n${node.note || ""}`.toLocaleLowerCase().includes(value)) : [];
   }, [map?.nodes, query]);
 
   const fitView = () => {
@@ -280,7 +306,7 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
     const element = stage.current; if (!position || !element) return;
     const rect = element.getBoundingClientRect();
     setViewport(current => ({ ...current, x: rect.width / 2 - (position.x + MIND_MAP_NODE_WIDTH / 2) * current.zoom, y: rect.height / 2 - (position.y + MIND_MAP_NODE_HEIGHT / 2) * current.zoom }));
-    setSelectedId(id);
+    showNodeDetails(id);
   };
 
   const updateNode = (id: string, patch: Partial<MindMapNode>) => commit(current => ({ ...current, nodes: current.nodes.map(node => node.id === id ? { ...node, ...patch } : node) }));
@@ -441,6 +467,14 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
     if (pan.current?.pointerId === event.pointerId) pan.current = undefined;
   };
 
+  const openNodeSource = (node: MindMapNode) => {
+    const source = node.source; if (!source) return;
+    const document = targetDocuments.find(item => item.id === source.documentId);
+    if (!document) { setError("来源课件已移除，请重新关联知识点的课件。"); return; }
+    if (source.page < 1 || source.page > document.pages) { setError("来源页码已失效，请重新选择知识点的课件页码。"); return; }
+    r.navigateSource(source.page, source.documentId);
+  };
+
   if (!target) return <main className="mind-map-workspace"><div className="workspace-empty"><h1>思维导图</h1><p>先打开一份课件，或创建包含课件的课程。</p><button onClick={() => r.setWorkspaceView("materials")}>打开资料</button></div></main>;
 
   return <main className={`mind-map-workspace ${generating ? "is-generating" : ""}`} aria-busy={loading || generating}>
@@ -540,8 +574,8 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
               className={`mind-map-node ${root ? "root" : ""} ${selectedId === node.id ? "selected" : ""} ${hit ? "search-hit" : ""}`}
               role="treeitem" aria-selected={selectedId === node.id} tabIndex={selectedId === node.id ? 0 : -1}
               style={{ left: position.x, top: position.y, "--node-color": node.color || MIND_MAP_COLORS[0] } as React.CSSProperties}
-              onClick={event => { event.stopPropagation(); setSelectedId(node.id); }}
-              onDoubleClick={event => { event.stopPropagation(); setEditingId(node.id); }}
+              onClick={event => { event.stopPropagation(); showNodeDetails(node.id); }}
+              onDoubleClick={event => { event.stopPropagation(); if (!(event.target as HTMLElement).closest("button")) setEditingId(node.id); }}
               onPointerDown={event => beginDrag(event, node)}
               onPointerMove={event => {
                 const state = drag.current; if (!state || state.pointerId !== event.pointerId || state.id !== node.id) return;
@@ -563,7 +597,12 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
               {editingId === node.id
                 ? <InlineNodeEditor node={node} onCommit={text => updateNode(node.id, { text })} onClose={() => setEditingId("")} />
                 : <span className="mind-map-node-title" title={node.text}>{node.text}</span>}
-              <span className="mind-map-node-meta">{node.note && <i title="有备注" />}{node.source && <b>第 {node.source.page} 页</b>}</span>
+              <span className="mind-map-node-meta">
+                <button className="mind-map-node-info" title="查看知识简介" aria-label={`查看知识简介：${node.text}`} onClick={event => { event.stopPropagation(); showNodeDetails(node.id); }}><Icon name="info" size={13} /></button>
+                {node.note && <i title="有备注" />}
+                {node.source && <button className="mind-map-node-source" title={`${node.source.documentName || "来源课件"} · 第 ${node.source.page} 页`} aria-label={`打开来源课件：${node.source.documentName || "来源课件"}，第 ${node.source.page} 页`}
+                  onClick={event => { event.stopPropagation(); openNodeSource(node); }}><Icon name="slides" size={12} />课件 · 第 {node.source.page} 页</button>}
+              </span>
               {!!children.length && <button className="mind-map-collapse" aria-label={node.collapsed ? "展开分支" : "折叠分支"} title={node.collapsed ? "展开分支" : "折叠分支"}
                 onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); updateNode(node.id, { collapsed: !node.collapsed }); }}>
                 {node.collapsed ? children.length : "−"}
@@ -573,10 +612,12 @@ export function MindMapWorkspace({ r }: { r: Reader }) {
         </div>
       </section>
       {selected ? <NodeInspector key={selected.id} node={selected} root={selected.id === map.rootId} documents={targetDocuments}
+        panelRef={inspectorPanel}
+        currentReadingDocument={targetDocuments.find(document => document.id === r.doc?.id)}
         nodes={map.nodes} onMove={parentId => moveNode(selected.id, parentId)} onReorder={direction => reorderNode(selected.id, direction)}
         childCount={mindMapChildren(map.nodes, selected.id).length} onPatch={patch => updateNode(selected.id, patch)}
         onAddChild={() => addNode(selected.id)} onAddSibling={() => addNode(selected.id, true)} onDuplicate={() => duplicateNode(selected.id)}
-        onRemove={() => removeNode(selected.id)} onNavigate={() => selected.source && r.navigateSource(selected.source.page, selected.source.documentId)} />
+        onRemove={() => removeNode(selected.id)} onNavigate={() => openNodeSource(selected)} />
         : <aside className="mind-map-inspector map-settings" aria-label="导图属性">
           <div className="mind-map-inspector-heading"><strong>导图</strong><small>{map.nodes.length} 个节点</small></div>
           <label>名称<CommitInput ariaLabel="导图名称" value={map.title} onCommit={title => commit(current => ({ ...current, title }))} /></label>

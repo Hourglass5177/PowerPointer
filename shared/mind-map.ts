@@ -18,6 +18,11 @@ export interface MindMapPosition {
   y: number;
 }
 
+export function mindMapNodeSummary(node: MindMapNode) {
+  // Older maps stored their explanation in note; keep it readable without a migration.
+  return node.summary?.trim() || node.note?.trim() || "";
+}
+
 export function mindMapChildren(nodes: MindMapNode[], parentId: string) {
   return nodes.filter((node) => node.parentId === parentId);
 }

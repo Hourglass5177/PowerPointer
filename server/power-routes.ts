@@ -103,6 +103,7 @@ export function powerRoutes(
     id,
     parentId: id.optional(),
     text: z.string().trim().min(1).max(160),
+    summary: z.string().max(1200).optional(),
     note: z.string().max(4000).optional(),
     color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
     collapsed: z.boolean().optional(),
