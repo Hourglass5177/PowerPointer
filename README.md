@@ -11,7 +11,7 @@ Windows 本地课件阅读助手。直接打开 PDF、PPT、PPTX，提供独立�
 3. 翻到要问的页，输入“这一步为什么成立”，按 **Enter** 或发送按钮；**Shift+Enter** 换行，Ctrl+Enter 也可发送。中文输入法选词时 Enter 不发送。
 4. 选字或框选后显示“弹窗解释／记笔记／对话引用”。选取本身不调用 AI；对话引用在发送时才调用 AI。文字、右侧回答和解释窗回答均可右键“弹窗解释”，继续深入。
 
-依赖：Windows、Node.js 24+；使用 Codex 订阅时需要官方 Codex CLI。PPT 导入还需本机安装 Microsoft PowerPoint 或 LibreOffice，两者均已在当前机器检测并验证。软件不会自动安装 Office 或调用在线转换网站。手动启动：
+依赖：Windows、Node.js 24+；使用 Codex 订阅时需要官方 Codex CLI。PPT 导入还需本机安装 Microsoft PowerPoint 或 LibreOffice。软件不会自动安装 Office 或调用在线转换网站。手动启动：
 
 ```powershell
 Set-Location -LiteralPath 'E:\大学\AI课件阅读器'
@@ -107,20 +107,35 @@ Codex 的令牌与线程继续保存在其托管目录（本机 `F:\Tools\OpenAI
 
 终端、文件写入、其他连接器、插件和钩子禁用，未知工具或审批请求拒绝。为兼容当前模型，工具通过 Codex 隔离的 V8 调度器执行；它仅调度已配置的读取工具，不提供系统终端或文件 API。本轮设置通过专用 App Server 进程生效；继承的其他 MCP 服务显式禁用，不改动用户全局配置。应用 HTTP 接口校验主机、来源和会话，不开放任意路径或任意 App Server RPC。普通翻页、阅读选字、对话引用、本地检索、历史浏览和连接状态检查不启动推理。选择“弹窗解释”、右键询问、发送问题和主动建库会调用模型。
 
-## 限制与验证
-
-本次章节整理、阅读笔记和首次使用改进：53 项自动测试及生产构建通过；使用独立数据目录完成 5 页示例的真实 AI 整理与递归解释收藏，并检查 1600、1440、1024、520px 布局。见 [本次检查记录](output/improvement-20261022/检查记录.md)。
-
-本次全局 UI 改版的状态与浏览器验收见 [界面改版验收](界面改版验收.md)。点读、课程与多窗口升级：33 项自动测试通过，生产构建通过；真实调用和浏览器检查详见 [Power Pointer 升级验收](PowerPointer升级验收.md)。
-
-已使用导入的 90 页 `0Lecture 1-lg-0320.pptx` 完成五轮真实学习流程：模型切换、联网核对、跨页图像查阅、框选问答、引用跳页及导出。详细问题、回答质量核对和修复记录见 [PowerPointer 实课验收](PowerPointer实课验收.md)。
+## 使用限制
 
 - 支持 PDF、PPT、PPTX，单文件上限 100 MB。加密文件需先在本地另存为无密码副本；没有解密输入界面。重复文件按原始内容去重，改名不会重复转换。
 - 扫描页可直接视觉问答；无文字层的页不能参与原文文字检索，不自动 OCR。主动生成课程总览时会读取这些页面的图像；本地索引覆盖率与 AI 已读页数分别显示。
-- 面向桌面浏览器，本轮检查 1920、1440、1024 和 520px 宽度，较窄窗口使用单面板切换。没有安装包、云同步、多用户与原生手机应用。
+- 面向桌面浏览器，较窄窗口使用单面板切换。没有安装包、云同步、多用户与原生手机应用。
 - 单次生成等待上限 5 分钟；服务失败、限制或断开会明确显示，未确认的结果需要主动处理。AI 解释与引用仍需人工核对。
-- 已验证 Node `24.15.0`、npm `11.12.1`、React `19.3.0`、Vite `7.3.7`、PDF.js `5.7.284`；完整版本由 `package-lock.json` 锁定。
+- 项目依赖版本由 `package-lock.json` 锁定。
 
-PowerPoint 实测版本 `16.0.20430.20146`，LibreOffice `26.2.4.2`。`samples` 包含 PDF、PPTX 和旧版 PPT 样例，其中演示文稿第三页为隐藏页。
+## 项目目录与开发工具
 
-`npm test` 运行不调用模型的自动测试。`npm run verify:ai` 使用真实订阅额度测试文字、图像和恢复；`scripts/verify-chat-ai.ts` 与 `scripts/verify-chat-branches.ts` 验证课件工具、联网、模型切换及真实分支，均会发起真实请求并保存验收会话。`scripts/verify-policy.ts` 验证关闭工具时的资料指令注入。`npm run sample` 可重新生成示例（使用 Windows 自带黑体）。验收结果及证据见 **[验证记录.md](验证记录.md)**。
+| 目录 | 用途 |
+| --- | --- |
+| `src` / `server` / `shared` | 前端、后端及共享类型与逻辑 |
+| `docs/manual` / `public/manual` | 应用内使用手册及配图 |
+| `samples` | PDF、PPTX 和旧版 PPT 示例；演示文稿第三页为隐藏页 |
+| `scripts` | 启动、构建、示例生成与独立检查工具 |
+| `tests` | 不调用真实模型的自动测试 |
+| `data` | 本机资料、会话、笔记及配置数据，不纳入 Git |
+| `node_modules` / `dist` | 本地依赖与构建产物，不纳入 Git |
+
+日常开发使用 `npm run dev`；`npm run build` 执行类型检查和前端构建，`npm test` 运行自动测试。`npm run sample` 使用 Windows 自带黑体重新生成 PDF 示例。
+
+保留以下独立检查工具，在项目根目录手动运行：
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run verify:ai` | 检查 Codex 文字、图像和线程恢复，会使用真实订阅额度 |
+| `npx tsx scripts/verify-policy.ts` | 检查关闭工具时的资料指令注入防护，会使用真实订阅额度 |
+| `npx tsx scripts/verify-pointer-ephemeral.ts` | 检查临时线程关闭后无法恢复，需要本机 Codex，不发起模型推理 |
+| `node scripts/verify-mind-map-browser.mjs` | 使用模拟接口检查导图交互与导出；需先构建，并安装 Chrome、Edge 或设置 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` |
+
+检查工具会按需生成 `output` 或 `data/verification`；这些输出不纳入 Git。历史验收报告和一次性脚本可从 Git 历史查阅。功能变更见 [开发日志](开发日志.md)。
