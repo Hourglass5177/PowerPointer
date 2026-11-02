@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Store } from "./store.ts";
 import { search } from "./search.ts";
 import { captureKnowledge, captureNotes } from "./learning-context.ts";
+import { resolveReadingSeed } from "./knowledge-sessions.ts";
 import {
   activeStates,
   type AISettings,
@@ -130,7 +131,9 @@ export class ReadingService {
       course?.selectedDocumentIds || [doc.id];
     if (course && !documentIds.includes(doc.id))
       throw Error("请先在课程来源中选中这份课件，再询问 AI");
-    const base =
+    const fromAnswer = input.selection.kind === "answer" && !!input.selection.turnId;
+    const readingSeed = parentContext?.readingSeed || (fromAnswer ? conversation?.readingSeed : !parent ? resolveReadingSeed(this.store, courseId, doc.id) : undefined);
+    const base = readingSeed && !parent && !fromAnswer ? [] :
       parentContext?.turns ||
       this.store
         .all<Turn>("turn")
@@ -138,14 +141,18 @@ export class ReadingService {
           (t) =>
             t.conversationId === conversation?.id && t.state === "completed",
         );
+    const boundary = fromAnswer && !parent ? base.findIndex(t => t.id === input.selection.turnId) : -1;
     const inherited = [
-      ...base,
+      ...(boundary >= 0 ? base.slice(0, boundary + 1) : base),
       ...(parent
         ? this.turns(parent.id).filter((t) => t.state === "completed")
         : []),
     ];
+    const origin = parent ? this.turns(parent.id).findLast(t => t.state === "completed") : fromAnswer ? base.find(t => t.id === input.selection.turnId) : undefined;
+    const forkFrom = origin?.runtimeThreadId && origin.threadTurnId && origin.model ? { threadId: origin.runtimeThreadId, turnId: origin.threadTurnId, connectionId: origin.connectionId || "codex", model: origin.model } : undefined;
     const context: ContextSnapshot = {
       id: randomUUID(),
+      readingSeed,
       title: parent?.title || conversation?.title || doc.name,
       conversationId: parentContext?.conversationId || conversation?.id,
       courseId,
@@ -159,6 +166,8 @@ export class ReadingService {
     };
     const session: ReadingSession = {
       id: input.id,
+      readingSeed,
+      forkFrom,
       parentId: parent?.id,
       parentTitle: parent?.title,
       contextId: context.id,
@@ -305,6 +314,7 @@ export class ReadingService {
       documentName: s.selection.documentName,
       courseId: context.courseId,
       title: s.title,
+      readingSeed: structuredClone(s.readingSeed),
       seedContextId: seed.id,
       createdAt: now,
       updatedAt: now,

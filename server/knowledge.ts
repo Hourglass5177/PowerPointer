@@ -5,15 +5,21 @@ import type { AISettings, KnowledgeChapter, KnowledgePage, KnowledgeRevision } f
 import { captureKnowledge, captureNotes, knowledgeText } from "./learning-context.ts";
 import { citedSources } from "../shared/chat.ts";
 import { chapterResults } from "../shared/learning.ts";
+import { ContinuousKnowledgeReader } from "./knowledge-reader.ts";
+import { READING_VERSION, sameSources, restoreReadingProgress } from "./knowledge-sessions.ts";
+import type { KnowledgeEngineFactory } from "./knowledge-runtime.ts";
 
 export type KnowledgeGenerator = (input: { prompt: string; documentId?: string; page?: number; settings: AISettings; signal: AbortSignal }) => Promise<string>;
 export interface KnowledgeOptions { documentIds?: string[]; overviewOnly?: boolean; force?: boolean }
 const CACHE_VERSION = "chapter-v3";
 export class KnowledgeService {
   private tasks = new Map<string, AbortController>();
-  constructor(private store: Store, private courses: CourseService, private generate: KnowledgeGenerator, private notify: () => void) {
-    for (const r of store.all<KnowledgeRevision>("knowledge"))
+  constructor(private store: Store, private courses: CourseService, private generate: KnowledgeGenerator, private notify: () => void, private engine?: KnowledgeEngineFactory) {
+    for (const saved of store.all<KnowledgeRevision>("knowledge")) {
+      const r = saved.cacheVersion === READING_VERSION ? restoreReadingProgress(store, saved) : saved;
       if (r.state === "building") this.save({ ...r, state: "paused", chapters: r.chapters.map(c => ({ ...c, state: c.state === "reading" || c.state === "summarizing" ? "paused" : c.state })), error: "整理因应用关闭暂停，已完成的内容已保留。" }, true);
+      else if (r.cacheVersion === READING_VERSION && ["paused", "partial", "failed"].includes(r.state)) this.store.put("knowledge", r);
+    }
   }
   get(id: string) {
     const r = this.store.get<KnowledgeRevision>("knowledge", id);
@@ -26,7 +32,7 @@ export class KnowledgeService {
     r.resultVersion = (this.store.get<KnowledgeRevision>("knowledge", r.id)?.resultVersion || r.resultVersion || 0) + Number(result);
     this.store.put("knowledge", r); this.notify(); return r;
   }
-  private fingerprint(settings: AISettings, version = CACHE_VERSION) {
+  private fingerprint(settings: AISettings, version = this.engine ? READING_VERSION : CACHE_VERSION) {
     return createHash("sha256").update(JSON.stringify([version, settings.connectionId || "codex", settings.model || "default", settings.reasoningEffort || "default", settings.assistantId || "explain", settings.assistantSnapshot?.prompt || "", settings.assistantSnapshot?.style || "", false, false])).digest("hex").slice(0, 24);
   }
   start(courseId: string, settings: AISettings, options: KnowledgeOptions = {}) {
@@ -48,24 +54,27 @@ export class KnowledgeService {
       state: "building", pages: [], total: documentIds.reduce((n, id) => n + this.store.document(id)!.pages, 0),
       chapters: options.overviewOnly ? available : documentIds.map(documentId => ({ documentId, summary: "", state: "queued", completed: 0, failed: 0, total: this.store.document(documentId)!.pages })),
       summary: "", createdAt: new Date().toISOString(), settings: { ...settings, agentTools: false, webSearch: false },
-      force: options.force, cacheVersion: CACHE_VERSION, resultVersion: 0, reused: 0,
+      force: options.force, cacheVersion: this.engine ? READING_VERSION : CACHE_VERSION, resultVersion: 0, reused: 0,
     };
     this.save(r, true); void this.run(r.id); return r;
   }
   available(courseId: string, documentIds: string[]) {
     const map = new Map<string, KnowledgeChapter>();
-    for (const { chapter: c, revision: r } of chapterResults(this.list(courseId), documentIds).values())
+    for (const { chapter: c, revision: r } of chapterResults(this.list(courseId).filter(r => !this.engine || !r.courseSessionId || sameSources(r.courseDocumentIds || r.documentIds, this.courses.get(courseId).selectedDocumentIds)), documentIds).values())
       map.set(c.documentId, { ...c, completed: c.summaryCompleted ?? c.completed ?? r.pages.filter(p => p.documentId === c.documentId && p.state === "completed").length, sources: c.sources || r.pages.filter(p => p.documentId === c.documentId && p.state === "completed").flatMap(p => p.sources) });
     return documentIds.map(id => map.get(id)).filter((c): c is KnowledgeChapter => !!c);
   }
   resume(id: string, retryFailed = false, settings?: AISettings) {
     const r = this.get(id);
+    if (this.engine && (r.cacheVersion !== READING_VERSION || settings && this.fingerprint(settings) !== this.fingerprint(r.settings)))
+      return this.start(r.courseId, settings || r.settings, { documentIds: r.documentIds, overviewOnly: r.mode === "overview" });
     const active = this.list(r.courseId).find(x => this.tasks.has(x.id));
     if (active) {
       if (active.id === id && active.state !== "paused") return active;
       throw Error("请先等待当前整理任务暂停");
     }
     const course = this.courses.get(r.courseId);
+    if (this.engine && !sameSources(r.courseDocumentIds || r.documentIds, course.selectedDocumentIds)) throw Error("课程来源已变更，请按当前资料开始新的整理");
     if (r.documentIds.some(d => !this.store.document(d) || !course.selectedDocumentIds.includes(d))) throw Error("来源已变更，请按当前资料开始新的整理");
     if (settings) r.settings = { ...settings, agentTools: false, webSearch: false };
     if (retryFailed) {
@@ -83,6 +92,11 @@ export class KnowledgeService {
   private async run(id: string) {
     const controller = new AbortController(); this.tasks.set(id, controller);
     const signal = controller.signal;
+    if (this.engine && this.get(id).cacheVersion === READING_VERSION) {
+      try { await new ContinuousKnowledgeReader(this.store, this.courses, this.engine, (r, result) => this.save(r, result)).run(id, signal); }
+      finally { this.tasks.delete(id); }
+      return;
+    }
     const check = () => { signal.throwIfAborted(); if (!this.store.get("knowledge", id)) throw Error("知识版本已删除"); };
     const reduce = async (key: string, chunks: string[], overview = false) => {
       let r = this.get(id);
@@ -168,7 +182,7 @@ export class KnowledgeService {
     } finally { this.tasks.delete(id); }
   }
   progress() {
-    return this.store.all<KnowledgeRevision>("knowledge").map(r => ({ id: r.id, courseId: r.courseId, state: r.state, total: r.total, completed: r.mode === "overview" ? r.chapters.reduce((n, c) => n + (c.summaryCompleted ?? c.completed ?? 0), 0) : r.pages.filter(p => p.state === "completed").length, failed: r.mode === "overview" ? r.chapters.reduce((n, c) => n + (c.failed || 0), 0) : r.pages.filter(p => p.state === "failed").length, phase: r.phase, activeDocumentId: r.activeDocumentId, resultVersion: r.resultVersion || 0, reused: r.reused || 0, chapters: r.chapters.map(({ documentId, state, completed, failed, total }) => ({ documentId, state, completed, failed, total })) }));
+    return this.store.all<KnowledgeRevision>("knowledge").map(r => ({ id: r.id, courseId: r.courseId, state: r.state, total: r.total, completed: r.mode === "overview" ? r.chapters.reduce((n, c) => n + (c.summaryCompleted ?? c.completed ?? 0), 0) : r.pages.filter(p => p.state === "completed").length, failed: r.mode === "overview" ? r.chapters.reduce((n, c) => n + (c.failed || 0), 0) : r.pages.filter(p => p.state === "failed").length, phase: r.phase, activeDocumentId: r.activeDocumentId, activePages: r.activePages, checkpoint: r.checkpoint, resultVersion: r.resultVersion || 0, reused: r.reused || 0, chapters: r.chapters.map(({ documentId, state, completed, failed, total }) => ({ documentId, state, completed, failed, total })) }));
   }
   context(id: string | undefined, documentIds: string[]) {
     const r = id ? this.store.get<KnowledgeRevision>("knowledge", id) : undefined;

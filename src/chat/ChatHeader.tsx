@@ -3,6 +3,7 @@ import type { Reader } from "../useReader.ts";
 import type { Conversation } from "../../shared/types.ts";
 import { api } from "../api.ts";
 import { Icon, Tool } from "../controls.tsx";
+import { ReadingSeedLabel } from "../ReadingSeedLabel.tsx";
 
 export function ChatHeader({
   r,
@@ -134,6 +135,7 @@ export function ChatHeader({
           <Tool icon="close" title="收起问答" onClick={onClose} />
         </div>
       </header>
+      <ReadingSeedLabel seed={r.conversation?.readingSeed} />
       {history && (
         <div className="chat-history" role="region" aria-label="会话历史列表">
           <div className="history-heading">

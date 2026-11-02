@@ -15,6 +15,7 @@ import { api, renderUrl } from "./api.ts";
 import { Icon } from "./controls.tsx";
 import { requestSaveAnswer } from "./useNotes.ts";
 import { ModelSelect, AssistantSelect, selectedModel } from "./AIControls.tsx";
+import { ReadingSeedLabel } from "./ReadingSeedLabel.tsx";
 function Window({
   session: s,
   turns,
@@ -348,6 +349,7 @@ function Window({
               </>
             )}
           </div>
+          <ReadingSeedLabel seed={s.readingSeed} />
           {options && (
             <div className="reading-options">
               {" "}

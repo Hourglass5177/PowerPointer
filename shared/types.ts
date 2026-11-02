@@ -37,6 +37,7 @@ export interface ImportJob {
   createdAt: string;
 }
 export interface Conversation {
+  readingSeed?: ReadingSeed;
   id: string;
   documentId: string;
   title: string;
@@ -205,6 +206,8 @@ export interface Course {
 }
 export type ChapterState = "queued" | "reading" | "summarizing" | "completed" | "partial" | "failed" | "paused";
 export interface KnowledgeChapter {
+  sessionId?: string;
+  checkpoint?: ReadingSeed;
   documentId: string;
   summary: string;
   state?: ChapterState;
@@ -233,6 +236,13 @@ export interface KnowledgePage {
   sources: Source[];
 }
 export interface KnowledgeRevision {
+  overviewChapters?: KnowledgeChapter[];
+  courseSessionId?: string;
+  baseCheckpoint?: ReadingSeed;
+  checkpoint?: ReadingSeed;
+  framework?: string;
+  frameworkSources?: Source[];
+  activePages?: number[];
   id: string;
   courseId: string;
   documentIds: string[];
@@ -249,7 +259,7 @@ export interface KnowledgeRevision {
   mode?: "chapters" | "course" | "overview";
   force?: boolean;
   cacheVersion?: string;
-  phase?: "reading" | "chapter" | "overview";
+  phase?: "framework" | "reading" | "chapter" | "overview";
   activeDocumentId?: string;
   resultVersion?: number;
   updatedAt?: string;
@@ -257,6 +267,7 @@ export interface KnowledgeRevision {
   reduction?: { key: string; chunks: string[]; next: string[]; offset: number };
 }
 export interface ContextSnapshot {
+  readingSeed?: ReadingSeed;
   id: string;
   courseId?: string;
   documentIds: string[];
@@ -269,6 +280,11 @@ export interface ContextSnapshot {
   createdAt: string;
 }
 export interface ReadingSession {
+  forkFrom?: { threadId: string; turnId: string; connectionId: string; model: string };
+  readingSeed?: ReadingSeed;
+  threadId?: string;
+  connectionId?: string;
+  model?: string;
   id: string;
   parentId?: string;
   parentTitle?: string;
@@ -287,6 +303,52 @@ export interface ReadingSession {
     minimized: boolean;
   };
   createdAt: string;
+}
+/** An immutable, completed boundary. Never points at an in-flight turn. */
+export interface ReadingSeed {
+  createdAt?: string;
+  sessionId: string;
+  through: number;
+  title: string;
+  documentIds: string[];
+  completed: number;
+  total: number;
+  connectionId: string;
+  model: string;
+  threadId?: string;
+  turnId?: string;
+  mode: "fork" | "context";
+  compressed?: boolean;
+}
+export interface KnowledgeReadTurn {
+  id: string;
+  key: string;
+  prompt: string;
+  images: string[];
+  sources: Source[];
+  pages: number[];
+  answer: string;
+  state: "pending" | "completed" | "failed";
+  runtimeTurnId?: string;
+  error?: string;
+}
+export interface KnowledgeReadSession {
+  chapterResults?: KnowledgeChapter[];
+  portableMemory?: { through: number; text: string };
+  id: string;
+  courseId: string;
+  documentId?: string;
+  documentIds: string[];
+  title: string;
+  settings: AISettings;
+  parent?: ReadingSeed;
+  threadId?: string;
+  turns: KnowledgeReadTurn[];
+  completedPages: number[];
+  total: number;
+  createdAt: string;
+  checkpoint?: ReadingSeed;
+  compressed?: boolean;
 }
 export interface LearningNote {
   id: string;

@@ -18,7 +18,10 @@ export function serviceUrl(base: string, suffix: string) {
 }
 async function jsonResponse(response: Response) {
   if (!response.ok) {
-    await response.body?.cancel();
+    const detail = [400, 413, 422].includes(response.status) ? await response.text() : "";
+    if (!detail) await response.body?.cancel();
+    if (response.status === 413 || /context_length_exceeded|maximum context length|prompt is too long|input.{0,20}too (large|long)|too many (input )?tokens/i.test(detail))
+      throw Error(`模型服务返回 HTTP ${response.status}：input too large，输入超出上下文限制`);
     const hint = response.status === 401 || response.status === 403 ? "请检查凭据与模型访问权限" : response.status === 429 ? "请求限流或额度不足" : "请检查服务地址和模型配置";
     throw Error(`模型服务返回 HTTP ${response.status}：${hint}`);
   }

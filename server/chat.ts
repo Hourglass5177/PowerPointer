@@ -291,6 +291,7 @@ export class ChatService {
       const now = new Date().toISOString(),
         conversationId = randomUUID();
       const child: Conversation = {
+        readingSeed: structuredClone(parent.readingSeed),
         id: conversationId,
         documentId: parent.documentId,
         courseId: parent.courseId,

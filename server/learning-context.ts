@@ -2,11 +2,12 @@ import type { Store } from "./store.ts";
 import type { Course, KnowledgeRevision, KnowledgeSnapshot, LearningNote } from "../shared/types.ts";
 import { chapterName, chapterResults, noteInDocument } from "../shared/learning.ts";
 import { citedSources } from "../shared/chat.ts";
+import { sameSources } from "./knowledge-sessions.ts";
 
 export function captureKnowledge(store: Store, courseId: string | undefined, documentIds: string[]): KnowledgeSnapshot {
   const course = courseId ? store.get<Course>("course", courseId) : undefined;
   const allowed = documentIds.filter(id => !!store.document(id));
-  const revisions = store.all<KnowledgeRevision>("knowledge").filter(r => r.courseId === courseId && !!courseId);
+  const revisions = store.all<KnowledgeRevision>("knowledge").filter(r => r.courseId === courseId && !!courseId && (!r.courseSessionId || sameSources(r.courseDocumentIds || r.documentIds, allowed)));
   const results = chapterResults(revisions, allowed);
   const snapshot: KnowledgeSnapshot = { capturedAt: new Date().toISOString(), summary: "", chapters: [], sources: [], completed: 0, total: allowed.reduce((n, id) => n + store.document(id)!.pages, 0) };
   for (const id of allowed) {
@@ -21,7 +22,7 @@ export function captureKnowledge(store: Store, courseId: string | undefined, doc
   const summary = revisions.filter(r => r.summary && r.documentIds.every(id => allowed.includes(id))).sort((a, b) => (a.summaryUpdatedAt || a.createdAt).localeCompare(b.summaryUpdatedAt || b.createdAt)).at(-1);
   if (summary) {
     snapshot.summary = summary.summary;
-    snapshot.sources.push(...summary.pages.flatMap(p => p.sources), ...summary.chapters.flatMap(c => c.sources || []));
+    snapshot.sources.push(...summary.pages.flatMap(p => p.sources), ...(summary.overviewChapters || summary.chapters).flatMap(c => c.sources || []));
   }
   const text = snapshot.summary + snapshot.chapters.map(c => c.summary).join("\n");
   snapshot.sources = citedSources(text, new Map(snapshot.sources.filter(s => allowed.includes(s.documentId) && !s.deleted).map(s => [s.id, { ...s, text: s.text.slice(0, 1000) }])));

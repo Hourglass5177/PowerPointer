@@ -10,6 +10,7 @@ import type {
   Document,
   ImportJob,
   KnowledgeRevision,
+  KnowledgeReadSession,
   ReadingSession,
   Turn,
 } from "../shared/types.ts";
@@ -167,7 +168,7 @@ export class Lifecycle {
         for (const child of Object.values(value))
           if (child && typeof child === "object") mark(child);
       };
-      for (const kind of ["turn", "readingTurn", "context", "note", "knowledge"])
+      for (const kind of ["turn", "readingTurn", "context", "note", "knowledge", "knowledgeSession"])
         for (const record of this.store.all<{ id: string }>(kind)) {
           mark(record);
           this.store.put(kind, record);
@@ -215,6 +216,22 @@ export class Lifecycle {
     );
     for (const c of this.store.all<ContextSnapshot>("context"))
       if (!contexts.has(c.id)) this.store.remove("context", c.id);
+    const retainedSessions = new Set<string>();
+    const retain = (value: unknown): void => {
+      if (!value || typeof value !== "object") return;
+      for (const [key, child] of Object.entries(value)) {
+        if (["sessionId", "courseSessionId"].includes(key) && typeof child === "string" && !retainedSessions.has(child)) {
+          retainedSessions.add(child);
+          retain(this.store.get<KnowledgeReadSession>("knowledgeSession", child));
+        } else if (child && typeof child === "object") retain(child);
+      }
+    };
+    for (const kind of ["knowledge", "conversation", "context", "reading"]) retain(this.store.all(kind));
+    for (const s of this.store.all<KnowledgeReadSession>("knowledgeSession")) if (!retainedSessions.has(s.id)) {
+      this.store.remove("knowledgeSession", s.id);
+      this.store.remove("knowledgeBatchPlan", s.id);
+      for (const split of this.store.all<{ id: string }>("knowledgeBatchSplit")) if (split.id.startsWith(s.id + ":")) this.store.remove("knowledgeBatchSplit", split.id);
+    }
     const images = new Set<string>();
     const activePrefixes = turns
       .filter((t) => ["preparing", "generating"].includes(t.state))
@@ -230,6 +247,7 @@ export class Lifecycle {
     visit(this.store.all("context"));
     visit(this.store.all("selection"));
     visit(this.store.all("note"));
+    visit(this.store.all("knowledgeSession"));
     const folder = path.join(this.store.dir, "attachments");
     if (existsSync(folder))
       for (const name of readdirSync(folder))
@@ -246,10 +264,16 @@ export class Lifecycle {
         }
   }
   pendingCleanup() {
+    const referenced = new Set<string>();
+    for (const kind of ["conversation", "reading", "context", "knowledgeSession"]) {
+      for (const item of this.store.all<{ readingSeed?: { threadId?: string }; forkFrom?: { threadId?: string }; parent?: { threadId?: string } }>(kind)) {
+        for (const seed of [item.readingSeed, item.forkFrom, item.parent]) if (seed?.threadId) referenced.add(seed.threadId);
+      }
+    }
     return [
       ...this.store
         .all<{ id: string; ownerId: string; error?: string }>("ownedThread")
-        .filter((r) => !this.store.conversation(r.ownerId)),
+        .filter((r) => !this.store.conversation(r.ownerId) && !this.store.get("reading", r.ownerId) && !this.store.get("knowledgeSession", r.ownerId) && !referenced.has(r.id)),
       ...this.store
         .all<{ id: string; error?: string }>("fileCleanup")
         .map((r) => ({ ...r, ownerId: "local-file" })),

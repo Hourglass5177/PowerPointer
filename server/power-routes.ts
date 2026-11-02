@@ -12,6 +12,7 @@ import type { KnowledgeService } from "./knowledge.ts";
 import type { Lifecycle } from "./lifecycle.ts";
 import type { MindMapService, MindMapTarget } from "./mind-maps.ts";
 import { NotesService, type NoteInput } from "./notes.ts";
+import { resolveReadingSeed } from "./knowledge-sessions.ts";
 import {
   type Conversation,
   type SelectionRef,
@@ -295,6 +296,7 @@ export function powerRoutes(
         documentName: store.document(d)?.name,
         courseId: c.id,
         title: "新会话",
+        readingSeed: resolveReadingSeed(store, c.id, d),
         createdAt: new Date().toISOString(),
       }),
     );
@@ -302,6 +304,11 @@ export function powerRoutes(
   app.get("/api/courses/:id/knowledge", (req, res) =>
     res.json(knowledge.list(req.params.id)),
   );
+  app.get("/api/knowledge/sessions/:id", (req, res) => {
+    const session = store.get("knowledgeSession", id.parse(req.params.id));
+    if (!session) { res.status(404).json({ error: "阅读会话不存在" }); return; }
+    res.json(session);
+  });
   app.post("/api/courses/:id/knowledge", async (req, res) => {
     const body = aiSettingsSchema.extend({ documentIds: z.array(documentId).min(1).max(2000).optional(), overviewOnly: z.boolean().optional(), force: z.boolean().optional() }).parse(req.body || {});
     const settings = services.resolveSettings ? await services.resolveSettings(aiSettingsSchema.parse(body)) : aiSettingsSchema.parse(body);
@@ -467,9 +474,10 @@ export function powerRoutes(
       .parse(req.body);
     res.json(reading.ask(req.params.id, b.question, b.requestId));
   });
-  app.delete("/api/reading/:id", (req, res) =>
-    res.json(reading.close(req.params.id, req.query.branch === "true")),
-  );
+  app.delete("/api/reading/:id", (req, res) => {
+    res.json(reading.close(req.params.id, req.query.branch === "true"));
+    void lifecycle.cleanupThreads();
+  });
   app.post("/api/reading/:id/promote", (req, res) =>
     res.json(reading.promote(req.params.id)),
   );

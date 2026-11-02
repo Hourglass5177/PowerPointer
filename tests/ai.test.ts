@@ -147,6 +147,16 @@ async function server(handler: (body: any, req: IncomingMessage, res: ServerResp
   return { url: `http://127.0.0.1:${(s.address() as { port: number }).port}`, requests, async close() { s.closeAllConnections(); await new Promise<void>(resolve => s.close(() => resolve())); } };
 }
 function events(res: ServerResponse, data: any[]) { res.writeHead(200, { "Content-Type": "text/event-stream" }); for (const event of data) res.write(`data: ${JSON.stringify(event)}\n\n`); res.end(); }
+test("仅明确的上下文超限错误允许缩小读取批次，普通400错误不误判", async () => {
+  let oversized = true;
+  const remote = await server((_body, _req, res) => { res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: { code: oversized ? "context_length_exceeded" : "invalid_request", message: "private provider detail" } })); });
+  const input = { model: "fixture", system: "system", messages: [{ role: "user" as const, text: "read" }], signal: new AbortController().signal };
+  try {
+    await assert.rejects(invokeProvider(connection(remote.url), "", input), /input too large/);
+    oversized = false;
+    await assert.rejects(invokeProvider(connection(remote.url), "", input), e => /HTTP 400/.test(String(e)) && !/input too large|private provider detail/.test(String(e)));
+  } finally { await remote.close(); }
+});
 function chat(res: ServerResponse, text = "", calls: any[] = []) { events(res, [{ choices: [{ delta: { content: text, ...(calls.length ? { tool_calls: calls.map((c, i) => ({ index: i, id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.arguments) } })) } : {}) } }] }, { choices: [{ delta: {}, finish_reason: calls.length ? "tool_calls" : "stop" }], usage: { prompt_tokens: 12, completion_tokens: 5, total_tokens: 17 } }]); }
 function connection(url: string, protocol: AIConnection["protocol"] = "compatible", id = randomUUID()): AIConnection {
   return { id, name: "协议夹具", protocol, baseUrl: url, enabled: true, createdAt: "2026-10-23", updatedAt: "2026-10-23", models: [{ model: "fixture", displayName: "Fixture", isDefault: true, defaultReasoningEffort: "", supportedReasoningEfforts: [], capabilities: { vision: true, tools: true, reasoning: false } }] };

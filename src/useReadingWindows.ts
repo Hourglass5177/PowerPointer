@@ -29,6 +29,7 @@ export function useReadingWindows(r: Reader) {
       failed: number;
       phase?: string;
       activeDocumentId?: string;
+      activePages?: number[];
       resultVersion: number;
       reused?: number;
       chapters: Pick<KnowledgeChapter, "documentId" | "state" | "completed" | "failed" | "total">[];

@@ -36,11 +36,12 @@ export function noteInDocument(note: LearningNote, documentId: string) {
 }
 
 export function summaryNeedsRefresh(summary: KnowledgeRevision, results: ReturnType<typeof chapterResults>, documentIds: string[]) {
-  if (summary.documentIds.some(id => !documentIds.includes(id)) || documentIds.some(id => !summary.documentIds.includes(id))) return true;
+  const scope = summary.courseSessionId ? summary.courseDocumentIds || summary.documentIds : summary.documentIds;
+  if (scope.some(id => !documentIds.includes(id)) || documentIds.some(id => !scope.includes(id))) return true;
   return documentIds.some(id => {
     const current = results.get(id);
     if (!current) return false;
-    const captured = summary.chapters.find(c => c.documentId === id);
+    const captured = (summary.overviewChapters || summary.chapters).find(c => c.documentId === id);
     const coverage = (chapter: KnowledgeChapter, revision: KnowledgeRevision) => chapter.summaryCompleted ?? chapter.completed ?? revision.pages.filter(p => p.documentId === id && p.state === "completed").length;
     return !captured || captured.summary !== current.chapter.summary || coverage(captured, summary) !== coverage(current.chapter, current.revision);
   });

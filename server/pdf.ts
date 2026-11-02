@@ -31,7 +31,12 @@ export async function renderPage(
 ) {
   const pdf = await openPdf(file);
   try {
+    return await renderPdfPage(pdf, pageNum, rotation, rect, maxSide);
+  } finally { await pdf.destroy(); }
+}
+export async function renderPdfPage(pdf: Awaited<ReturnType<typeof openPdf>>, pageNum: number, rotation = 0, rect?: Rect, maxSide = 1600) {
     const p = await pdf.getPage(pageNum);
+    try {
     const base = p.getViewport({
       scale: 1,
       rotation: (p.rotate + rotation) % 360,
@@ -63,6 +68,6 @@ export async function renderPage(
     crop.getContext("2d").drawImage(canvas, r[0], r[1], w, h, 0, 0, w, h);
     return crop.toBuffer("image/png");
   } finally {
-    await pdf.destroy();
+    p.cleanup();
   }
 }

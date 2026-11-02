@@ -452,7 +452,9 @@ export class Codex extends EventEmitter {
     beforeTurnId?: string,
     previousTurnId?: string,
   ) {
-    await this.thread(model, threadId);
+    // Fork reads the persisted boundary directly. Resuming the source here would
+    // acquire a second writer while a continuous reading worker still owns it.
+    await this.connect();
     const params = {
       threadId,
       model,
@@ -489,8 +491,6 @@ export class Codex extends EventEmitter {
       throw Error("分支线程未创建，原会话未更改。");
     this.loaded.delete(result.thread.id);
     await this.rpc("thread/unsubscribe", { threadId: result.thread.id });
-    await this.rpc("thread/unsubscribe", { threadId });
-    this.loaded.delete(threadId);
     return result.thread.id as string;
   }
   async readTurn(threadId: string, turnId: string) {

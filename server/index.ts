@@ -26,6 +26,8 @@ import { Scheduler } from "./scheduler.ts";
 import { CourseService } from "./courses.ts";
 import { ReadingService, contextText, relatedTurns } from "./reading.ts";
 import { KnowledgeService } from "./knowledge.ts";
+import { PersistentKnowledgeRuntime } from "./knowledge-runtime.ts";
+import { readingBackground, readingHistory } from "./knowledge-sessions.ts";
 import { MindMapService } from "./mind-maps.ts";
 import { knowledgeText } from "./learning-context.ts";
 import { Lifecycle } from "./lifecycle.ts";
@@ -334,6 +336,7 @@ const knowledge = new KnowledgeService(
   courses,
   async (input) => (await generateLearningContent(input, "knowledge")).text,
   notify,
+  () => new PersistentKnowledgeRuntime(store, aiConfig, scheduler),
 );
 const mindMaps = new MindMapService(
   store,
@@ -687,6 +690,10 @@ async function execute(t: Turn, reuse = false) {
           documentId: d.id,
           title: session.title,
           createdAt: session.createdAt,
+          threadId: session.threadId,
+          model: session.model,
+          connectionId: session.connectionId,
+          readingSeed: session.readingSeed,
         }
       : mustConv(t.conversationId);
     if (!reuse) {
@@ -775,7 +782,7 @@ async function execute(t: Turn, reuse = false) {
       agentTools: (s.agentTools ?? true) && s.assistantSnapshot.tools.includes("course"),
       webSearch: (s.webSearch ?? false) && s.assistantSnapshot.tools.includes("web"),
       requestId: t.id,
-      ephemeral: !!session,
+      ephemeral: false,
       reader: {
         documentId: d.id,
         page: s.page,
@@ -793,9 +800,25 @@ async function execute(t: Turn, reuse = false) {
     worker = runtime.worker(resolved.connection, options, { ...resolved.settings, assistantSnapshot: s.assistantSnapshot }, broker);
     update(t);
     try {
+      const seed = c.readingSeed;
+      const inherited = session?.forkFrom;
+      const forkSource = inherited?.connectionId === resolved.connection.id ? inherited : seed;
+      if (!c.threadId && seed) seed.mode = "context";
+      if (!c.threadId && forkSource && resolved.connection.protocol === "codex" && forkSource.threadId && forkSource.turnId && forkSource.connectionId === resolved.connection.id && !t.switchedModel) {
+        const forker = new Codex(dir, { executable: resolved.connection.codexPath });
+        try { c.threadId = await forker.fork(selected.model, forkSource.threadId, undefined, forkSource.turnId); if (seed) seed.mode = "fork"; }
+        finally { await forker.shutdown(); }
+        lifecycle.own(c.threadId, c.id);
+      }
+      if (seed && (!seed.threadId || seed.connectionId !== resolved.connection.id || resolved.connection.protocol !== "codex")) seed.mode = "context";
       c.threadId = await worker.thread(c.model, c.threadId, options);
       t.runtimeThreadId = resolved.connection.protocol === "codex" ? c.threadId : undefined;
       c.resumeError = undefined;
+      if (session) {
+        if (resolved.connection.protocol === "codex") lifecycle.own(c.threadId, session.id);
+        const latest = store.get<import("../shared/types.ts").ReadingSession>("reading", session.id);
+        if (latest) store.put("reading", { ...latest, threadId: resolved.connection.protocol === "codex" ? c.threadId : undefined, connectionId: c.connectionId, model: c.model, readingSeed: seed });
+      }
       if (!session) {
         if (resolved.connection.protocol === "codex") lifecycle.own(c.threadId, c.id);
         stopped();
@@ -806,6 +829,7 @@ async function execute(t: Turn, reuse = false) {
           threadId: resolved.connection.protocol === "codex" ? c.threadId : undefined,
           runtimeBindings: resolved.connection.protocol === "codex" ? { ...c.runtimeBindings, [`${c.connectionId}::${c.model}`]: { threadId: c.threadId, model: c.model } } : c.runtimeBindings,
           resumeError: undefined,
+          readingSeed: seed,
         });
       }
     } catch (e) {
@@ -832,6 +856,9 @@ async function execute(t: Turn, reuse = false) {
       ? store.get<ContextSnapshot>("context", s.contextSnapshotId)
       : undefined;
     const background = contextText(frozen, t.question + " " + s.selectedText);
+    const seed = c.readingSeed || frozen?.readingSeed;
+    const seedHistory = readingHistory(store, seed);
+    for (const source of seedHistory.flatMap(h => h.sources)) if ((s.documentIds || [d.id]).includes(source.documentId) && !s.sources.some(x => x.id === source.id)) s.sources.push({ ...source, text: source.text.slice(0, 1000) });
     const localHistory = session
       ? relatedTurns(
           reading.turns(session.id).filter((x) => x.id !== t.id),
@@ -840,7 +867,7 @@ async function execute(t: Turn, reuse = false) {
         )
       : [];
     const knowledgeSnapshot = s.knowledgeSnapshot || frozen?.knowledgeSnapshot;
-    const overview = knowledgeText(knowledgeSnapshot);
+    const overview = seed ? resolved.connection.protocol === "codex" && seed.mode === "fork" && !t.switchedModel ? `已从《${seed.title}》的固定阅读检查点继承上下文，覆盖${seed.completed}/${seed.total}页。未读内容不能当作已读。` : readingBackground(store, seed) : knowledgeText(knowledgeSnapshot);
     const notes = (s.noteSnapshot || frozen?.notes || [])
           .filter((n) =>
             n.sources.every((src) =>
@@ -932,7 +959,7 @@ async function execute(t: Turn, reuse = false) {
     update(t);
     release?.();
     lifecycle.collect();
-    if (!store.conversation(t.conversationId) && !t.readingSessionId)
+    if (!store.conversation(t.conversationId) && (!t.readingSessionId || !store.get("reading", t.readingSessionId)))
       void lifecycle.cleanupThreads();
   }
 }

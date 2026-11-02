@@ -487,11 +487,11 @@ export function useReader() {
     });
     await refreshJobs();
   };
-  const newConversation = async () => {
+  const newConversation = async (documentId = doc?.id) => {
     if (!doc) return;
     const c = await api<Conversation>(conversationCreateUrl, {
       method: "POST",
-      body: JSON.stringify({ documentId: doc.id }),
+      body: JSON.stringify({ documentId }),
     });
     if (currentContext.current !== contextKey) return;
     setConversations((cs) => [...cs, c]);
