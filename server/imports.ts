@@ -53,12 +53,14 @@ export function fileFormat(bytes: Buffer, name: string): ImportJob["format"] {
       let total = 0;
       const entries = unzipSync(bytes, {
         filter: (e) => {
+          // Only these XML entries are inflated for format detection. Large media
+          // entries are skipped and must not impose a limit on the course file.
+          if (!["[Content_Types].xml", "ppt/presentation.xml"].includes(e.name))
+            return false;
           total += e.originalSize;
           if (total > 512 * 1024 * 1024 || e.originalSize > 100 * 1024 * 1024)
             throw Error("文件解压体积过大");
-          return ["[Content_Types].xml", "ppt/presentation.xml"].includes(
-            e.name,
-          );
+          return true;
         },
       });
       if (

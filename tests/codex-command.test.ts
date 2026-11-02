@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { AIConfig } from "../server/ai-config.ts";
 import { Codex } from "../server/codex.ts";
-import { resolveCodexCommand } from "../server/codex-command.ts";
+import { discoverCodexCommand, resolveCodexCommand } from "../server/codex-command.ts";
 import { Store } from "../server/store.ts";
 import type { AIConnection } from "../shared/ai.ts";
 
@@ -73,6 +73,54 @@ test("无法安全解析的路径明确报错，不交给命令行执行", () =>
     assert.throws(() => resolveCodexCommand(dir), /codex\.exe/);
     assert.throws(() => resolveCodexCommand(path.join(dir, "missing.exe")), /找不到 Codex CLI/);
     assert.throws(() => resolveCodexCommand(""), /找不到 Codex CLI/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("自动检测跳过失效 PATH 和包装脚本，继续找到可用 npm 安装", () => {
+  const { dir, script } = install();
+  try {
+    const stale = path.join(dir, "stale");
+    mkdirSync(stale);
+    writeFileSync(path.join(stale, "codex.cmd"), '"%dp0%\\missing\\codex.js" %*');
+    const command = discoverCodexCommand({ env: { Path: [path.join(dir, "gone"), stale, `"${dir}"`].join(path.delimiter) } });
+    assert.deepEqual(command, process.platform === "win32" ? { command: process.execPath, args: [script] } : { command: path.join(dir, "codex"), args: [] });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("Windows 自动检测用户 npm 目录，无需手填路径", { skip: process.platform !== "win32" }, () => {
+  const { dir } = install();
+  try {
+    const npm = path.join(dir, "npm"), script = path.join(npm, entry);
+    mkdirSync(path.dirname(script), { recursive: true });
+    writeFileSync(script, "");
+    writeFileSync(path.join(npm, "codex.cmd"), shims["codex.cmd"]);
+    assert.deepEqual(discoverCodexCommand({ env: { APPDATA: dir } }), { command: process.execPath, args: [script] });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("桌面 CLI 更新后重新发现新版本，忽略旧 PATH、空目录及失效备用路径", { skip: process.platform !== "win32" }, () => {
+  const { dir } = install();
+  try {
+    const bin = path.join(dir, "OpenAI", "Codex", "bin");
+    const old = path.join(bin, "old", "codex.exe"), current = path.join(bin, "current", "codex.exe");
+    for (const name of ["old", "current", "removed"]) mkdirSync(path.join(bin, name), { recursive: true });
+    writeFileSync(old, ""); writeFileSync(current, "");
+    utimesSync(old, new Date(0), new Date(0));
+    const options = { env: { PATH: path.join(bin, "removed"), LOCALAPPDATA: dir }, fallback: path.join(bin, "removed", "codex.exe") };
+    assert.deepEqual(discoverCodexCommand(options), { command: current, args: [] });
+    rmSync(current);
+    const next = path.join(bin, "next", "codex.exe");
+    mkdirSync(path.dirname(next)); writeFileSync(next, "");
+    assert.deepEqual(discoverCodexCommand(options), { command: next, args: [] });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("明确配置的 CLI 不被自动替换，旧备用配置只在自动检测失败时使用", () => {
+  const { dir, script } = install();
+  try {
+    assert.deepEqual(discoverCodexCommand({ env: {}, fallback: script }), { command: process.execPath, args: [script] });
+    assert.throws(() => discoverCodexCommand({ executable: path.join(dir, "missing.exe"), env: { PATH: dir } }), /找不到 Codex CLI/);
+    assert.throws(() => discoverCodexCommand({ env: {} }), /找不到 Codex CLI/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

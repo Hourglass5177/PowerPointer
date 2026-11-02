@@ -104,6 +104,17 @@ test("格式识别拒绝伪装、损坏和加密文件，支持真实 PPTX 容�
     /加密/,
   );
 });
+test("PPTX 格式检查允许大型媒体，仍限制实际解压的 XML", () => {
+  const large = new Uint8Array(100 * 1024 * 1024 + 1);
+  const xml = {
+    "[Content_Types].xml": strToU8("application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"),
+    "ppt/presentation.xml": strToU8("<p:presentation/>"),
+  };
+  const media = Buffer.from(zipSync({ ...xml, "ppt/media/video.mp4": large }, { level: 1 }));
+  assert.equal(fileFormat(media, "large-media.pptx"), "pptx");
+  const oversizedXml = Buffer.from(zipSync({ ...xml, "ppt/presentation.xml": large }, { level: 1 }));
+  assert.throws(() => fileFormat(oversizedXml, "oversized-xml.pptx"), /解压体积过大/);
+});
 test("取消后立即重试不会被旧任务覆盖，检测引擎期间取消也保持取消状态", async () => {
   let calls = 0;
   const t = setup(async (_i, o, _engine, signal) => {

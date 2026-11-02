@@ -1,7 +1,55 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 export type CodexCommand = { command: string; args: string[] };
+
+export function discoverCodexCommand(options: {
+  executable?: string;
+  fallback?: string;
+  env?: NodeJS.ProcessEnv;
+} = {}): CodexCommand {
+  const env = options.env || process.env;
+  const configured = options.executable?.trim() || env.LECTURE_CODEX_PATH?.trim();
+  if (configured) return resolveCodexCommand(configured);
+
+  const names = process.platform === "win32"
+    ? ["codex.exe", "codex.com", "codex.cmd", "codex.ps1", "codex"]
+    : ["codex"];
+  const candidates: string[] = [];
+  const addDirectory = (directory?: string) => {
+    const folder = directory?.trim().replace(/^"(.*)"$/, "$1");
+    if (folder) candidates.push(...names.map(name => path.join(folder, name)));
+  };
+  // Try every PATH entry: an obsolete wrapper must not hide a working install.
+  const searchPath = Object.entries(env).find(([key]) => key.toUpperCase() === "PATH")?.[1];
+  for (const folder of (searchPath || "").split(path.delimiter)) addDirectory(folder);
+  if (process.platform === "win32") {
+    if (env.APPDATA) addDirectory(path.join(env.APPDATA, "npm"));
+    if (env.LOCALAPPDATA) {
+      const bin = path.join(env.LOCALAPPDATA, "OpenAI", "Codex", "bin");
+      addDirectory(bin);
+      // Desktop updates replace versioned directories while already-running apps
+      // retain their old PATH. Discover the current install again on reconnect.
+      try {
+        const versions = readdirSync(bin, { withFileTypes: true })
+          .filter(entry => entry.isDirectory())
+          .flatMap(entry => {
+            const folder = path.join(bin, entry.name);
+            try { return [{ folder, modified: statSync(path.join(folder, "codex.exe")).mtimeMs }]; }
+            catch { return []; }
+          })
+          .sort((a, b) => b.modified - a.modified || a.folder.localeCompare(b.folder));
+        for (const { folder } of versions) addDirectory(folder);
+      } catch { /* Desktop CLI is not installed for this user. */ }
+    }
+  }
+  if (options.fallback) candidates.push(options.fallback);
+  for (const candidate of new Set(candidates)) {
+    try { return resolveCodexCommand(candidate); }
+    catch { /* Continue past missing executables and stale npm wrappers. */ }
+  }
+  throw Error("找不到 Codex CLI。请安装官方 CLI 后重试；已安装时请检查安装是否完整。");
+}
 
 // Written by npm/pnpm into codex.cmd, codex.ps1 and the extensionless sh shim.
 const shimEntry = /(?:%~?dp0%?|\$basedir)[\\/]+([^"'\r\n;%$]+?\.[cm]?js)(?=["'])/i;

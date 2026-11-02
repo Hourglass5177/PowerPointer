@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from "node:crypto";
-import { watch, type FSWatcher } from "node:fs";
+import { createReadStream, watch, type FSWatcher } from "node:fs";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import type {
@@ -34,12 +34,11 @@ export async function scanDirectory(root: string): Promise<CourseFile[]> {
       if (entry.isDirectory()) await walk(actual, depth + 1);
       else if (entry.isFile() && /\.(pdf|pptx?)$/i.test(entry.name)) {
         const info = await stat(actual);
-        if (info.size > 100 * 1024 * 1024)
-          throw Error(`${entry.name} 超过 100 MB，请将大文件移到课程目录之外`);
-        const bytes = await readFile(actual);
+        const hash = createHash("sha256");
+        for await (const chunk of createReadStream(actual)) hash.update(chunk);
         files.push({
           path: path.relative(canonical, full),
-          hash: createHash("sha256").update(bytes).digest("hex"),
+          hash: hash.digest("hex"),
           size: info.size,
           modifiedAt: info.mtimeMs,
           selected: false,

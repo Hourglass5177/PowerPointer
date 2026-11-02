@@ -8,6 +8,7 @@ import {
   existsSync,
   rmSync,
   renameSync,
+  truncateSync,
 } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -373,6 +374,35 @@ test("删除资料默认保留问答与冻结图像，标记旧来源；不删�
     assert.equal(readFileSync(original, "utf8"), "original");
     assert.equal(f.store.searchDocuments([f.docs[0].id], "可检索").length, 0);
   } finally {
+    f.close();
+  }
+});
+test("目录包含超过 100 MB 的课件时仍可访问，扫描哈希和变更保持准确", async () => {
+  const f = fixture();
+  let courses: CourseService | undefined;
+  try {
+    const folder = path.join(f.dir, "large-course");
+    mkdirSync(folder);
+    const large = path.join(folder, "large.pptx"), size = 100 * 1024 * 1024 + 1;
+    writeFileSync(large, "");
+    truncateSync(large, size);
+    writeFileSync(path.join(folder, "small.pdf"), "small course");
+    courses = new CourseService(f.store, {} as ImportManager, () => {});
+    const course = courses.create("大文件课程");
+    const scanned = await courses.bind(course.id, folder);
+    assert.equal(scanned.offline, undefined);
+    assert.equal(scanned.changes.length, 2);
+    const change = scanned.changes.find(c => c.path === "large.pptx")!;
+    assert.equal(change.size, size);
+    const expected = createHash("sha256"), block = Buffer.alloc(1024 * 1024);
+    for (let i = 0; i < 100; i++) expected.update(block);
+    expected.update(Buffer.alloc(1));
+    assert.equal(change.hash, expected.digest("hex"));
+    const rescanned = await courses.scan(course.id);
+    assert.equal(rescanned.offline, undefined);
+    assert.equal(rescanned.scanId, scanned.scanId);
+  } finally {
+    courses?.close();
     f.close();
   }
 });

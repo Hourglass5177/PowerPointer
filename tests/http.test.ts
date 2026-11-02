@@ -129,9 +129,23 @@ test("本地接口：导入、去重、索引、页面图、跨站/越界/跨文
     await invalid(await get("/api/no-such-route"), 404, /接口不存在/);
     await invalid(await fetch(origin + "/api/notes", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{bad" }), 400, /请求参数无效/);
     await invalid(await fetch(origin + `/api/documents/${one.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ page: 1, rotation: 45, zoom: 1 }) }), 400, /请求参数无效/);
-    const oversized = new FormData();
-    oversized.append("file", new Blob([new Uint8Array(100 * 1024 * 1024 + 1)]), "big.pdf");
-    await invalid(await fetch(origin + "/api/imports", { method: "POST", headers, body: oversized }), 400, /100 MB/);
+    const largePdf = readFileSync("samples/纯扫描 图形.pdf");
+    const trailer = largePdf.subarray(largePdf.lastIndexOf(Buffer.from("startxref")));
+    const largeUpload = new FormData();
+    largeUpload.append("file", new Blob([largePdf, new Uint8Array(100 * 1024 * 1024).fill(32), trailer]), "big.pdf");
+    const accepted = await fetch(origin + "/api/imports", { method: "POST", headers, body: largeUpload });
+    assert.equal(accepted.status, 202, "超过 100 MB 的 PDF 应进入导入队列");
+    const job = await accepted.json() as { id: string };
+    let imported: any;
+    for (let i = 0; i < 300; i++) {
+      imported = await (await get(`/api/imports/${job.id}`)).json();
+      if (!["queued", "processing"].includes(imported.state)) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.equal(imported.state, "completed", imported.error);
+    const largeImage = await get(`/api/documents/${imported.documentId}/render?page=1`);
+    assert.equal(largeImage.status, 200);
+    assert.ok((await largeImage.arrayBuffer()).byteLength > 1000);
     assert.equal(
       (await get(`/api/documents/${one.id}/render?page=9999`)).status,
       400,
@@ -157,7 +171,7 @@ test("本地接口：导入、去重、索引、页面图、跨站/越界/跨文
     const again = await (await post("/api/sample", {})).json() as any;
     assert.equal(sample.course.id, again.course.id);
     assert.equal(again.course.documentIds.length, 1);
-    assert.equal((await (await get("/api/documents")).json() as any[]).length, 2);
+    assert.equal((await (await get("/api/documents")).json() as any[]).length, 3);
     const setup = await (await get("/api/setup")).json() as any;
     assert.equal(setup.node.ready, true);
     assert.equal(typeof setup.powerpoint, "boolean");

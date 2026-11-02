@@ -187,7 +187,7 @@ function update(t: Turn) {
 const chat = new ChatService(store, ai, update, execute);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024, files: 1 },
+  limits: { files: 1 },
 });
 
 let renderQueue = Promise.resolve();
@@ -1035,11 +1035,9 @@ app.use(
       error: redact(
         missing
           ? "文件不存在"
-          : err.code === "LIMIT_FILE_SIZE"
-            ? "课件超过 100 MB 上限"
-            : err instanceof z.ZodError || err.type === "entity.parse.failed"
-              ? "请求参数无效"
-              : err.message || String(err),
+          : err instanceof z.ZodError || err.type === "entity.parse.failed"
+            ? "请求参数无效"
+            : err.message || String(err),
       ),
     });
   },

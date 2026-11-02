@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AIModel, Source, ToolActivity } from "../shared/types.ts";
 import type { ReaderToolContext } from "./reader-tools.ts";
-import { resolveCodexCommand, type CodexCommand } from "./codex-command.ts";
+import { discoverCodexCommand } from "./codex-command.ts";
 const readerToolNames = [
   "search_course",
   "read_pages",
@@ -163,30 +163,10 @@ export class Codex extends EventEmitter {
     const local = existsSync(settingsPath)
       ? JSON.parse(readFileSync(settingsPath, "utf8"))
       : {};
-    const configured = this.startupOptions.executable || process.env.LECTURE_CODEX_PATH || "";
-    let command: CodexCommand;
-    if (configured) command = resolveCodexCommand(configured);
-    else {
-      try {
-        command = resolveCodexCommand(
-          execFileSync(
-            "powershell.exe",
-            [
-              "-NoProfile",
-              "-Command",
-              "(Get-Command codex -ErrorAction Stop).Source",
-            ],
-            {
-              encoding: "utf8",
-              windowsHide: true,
-              stdio: ["ignore", "pipe", "ignore"],
-            },
-          ),
-        );
-      } catch {
-        command = resolveCodexCommand(local.codexExecutable || "");
-      }
-    }
+    const command = discoverCodexCommand({
+      executable: this.startupOptions.executable,
+      fallback: local.codexExecutable,
+    });
     this.executable = command.command;
     this.version = execFileSync(this.executable, [...command.args, "--version"], {
       encoding: "utf8",
