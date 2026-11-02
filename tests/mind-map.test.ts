@@ -10,7 +10,7 @@ import { MindMapService } from "../server/mind-maps.ts";
 import { powerRoutes } from "../server/power-routes.ts";
 import express from "express";
 import { EventEmitter } from "node:events";
-import { layoutMindMap, validateMindMapNodes, visibleMindMapNodes } from "../shared/mind-map.ts";
+import { layoutMindMap, mindMapNodeSummary, validateMindMapNodes, visibleMindMapNodes } from "../shared/mind-map.ts";
 import type { ImportManager } from "../server/imports.ts";
 import type { Document, MindMapNode } from "../shared/types.ts";
 
@@ -53,6 +53,7 @@ test("导图持久化使用版本保护，AI 初稿保留有效来源", async ()
           text: "高等数学",
           children: [{
             text: "极限",
+            summary: "当自变量趋近某点时，函数值趋近的确定值。",
             note: "函数变化趋势",
             source: { documentId: document.id, page: 1 },
             children: [{ text: "定义", children: [] }],
@@ -65,9 +66,11 @@ test("导图持久化使用版本保护，AI 初稿保留有效来源", async ()
     const created = service.create({ scope: "course", courseId: course.id });
     const child = randomUUID();
     const updated = service.update(created.id, created.version, {
-      nodes: [...created.nodes, { id: child, parentId: created.rootId, text: "手工节点" }],
+      nodes: [...created.nodes, { id: child, parentId: created.rootId, text: "手工节点", summary: "  独立的知识简介  ", note: "自己的复习笔记" }],
     });
     assert.equal(updated.version, 2);
+    assert.equal(service.get(created.id).nodes[1].summary, "独立的知识简介");
+    assert.equal(service.get(created.id).nodes[1].note, "自己的复习笔记");
     assert.throws(() => service.update(created.id, 1, { title: "过期写入" }), /已在其他操作中更新/);
     const generated = await service.generate({
       mapId: updated.id,
@@ -78,8 +81,12 @@ test("导图持久化使用版本保护，AI 初稿保留有效来源", async ()
     assert.equal(generated.title, "高等数学导图");
     assert.equal(generated.nodes.length, 3);
     assert.equal(generated.nodes[1].source?.documentId, document.id);
+    assert.equal(generated.nodes[1].summary, "当自变量趋近某点时，函数值趋近的确定值。");
+    assert.equal(generated.nodes[1].note, "函数变化趋势");
     assert.equal(generated.generatedWith?.model, "test-model");
     assert.match(prompt, /极限是微积分的基础概念/);
+    assert.match(prompt, /每个节点都在 summary/);
+    assert.match(prompt, /禁止猜测页码/);
     assert.equal(service.list({ scope: "course", courseId: course.id })[0].id, generated.id);
   } finally {
     courses.close();
@@ -95,6 +102,13 @@ test("导图拒绝循环或断开的节点树", () => {
     { id: root, text: "根", parentId: child },
     { id: child, text: "子", parentId: root },
   ], root), /根节点|循环/);
+});
+
+test("知识简介优先独立内容，兼容旧导图备注和空白知识点", () => {
+  const node = { id: randomUUID(), text: "知识点", note: "旧版知识说明" };
+  assert.equal(mindMapNodeSummary(node), "旧版知识说明");
+  assert.equal(mindMapNodeSummary({ ...node, summary: "新的知识简介" }), "新的知识简介");
+  assert.equal(mindMapNodeSummary({ id: node.id, text: node.text }), "");
 });
 
 test("AI 生成时的并发修改、删除、无效结果不会覆盖原导图", async () => {
@@ -182,6 +196,19 @@ test("实际路由校验、导入事务和 AI 撤销后根节点保存", async (
     assert.equal(generated.title, "AI 初稿");
     const restored = await invoke("put", "/api/mind-maps/:id", { expectedVersion: generated.version, rootId: created.rootId, nodes: created.nodes }, { id: created.id });
     assert.equal(restored.rootId, created.rootId);
+    const imported = await invoke("post", "/api/mind-maps", { scope: "document", documentId: doc.id,
+      imported: { rootId: created.rootId, nodes: [{ ...created.nodes[0], summary: "导入的简介", note: "独立备注", source: { documentId: doc.id, page: 1 } }], theme: "paper", layout: "tree" },
+    });
+    assert.equal(imported.nodes[0].summary, "导入的简介");
+    assert.equal(imported.nodes[0].source.documentName, doc.name);
+    assert.equal(mindMaps.get(imported.id).nodes[0].note, "独立备注");
+    await assert.rejects(invoke("put", "/api/mind-maps/:id", { expectedVersion: imported.version,
+      nodes: [{ ...imported.nodes[0], summary: "长".repeat(1201) }] }, { id: imported.id }));
+    await assert.rejects(invoke("put", "/api/mind-maps/:id", { expectedVersion: imported.version,
+      nodes: [{ ...imported.nodes[0], source: { documentId: doc.id, page: 2 } }] }, { id: imported.id }), /无效的课件页码/);
+    await assert.rejects(invoke("put", "/api/mind-maps/:id", { expectedVersion: imported.version,
+      nodes: [{ ...imported.nodes[0], source: { documentId: "e".repeat(64), page: 1 } }] }, { id: imported.id }), /无效的课件页码/);
+    assert.equal(mindMaps.get(imported.id).version, imported.version, "Invalid changes leave the stored version untouched");
     const before = store.all("mindMap").length;
     await assert.rejects(invoke("post", "/api/mind-maps", { scope: "document", documentId: doc.id, imported: { rootId: randomUUID(), nodes: created.nodes, theme: "paper", layout: "tree" } }), /根节点/);
     assert.equal(store.all("mindMap").length, before);

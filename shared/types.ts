@@ -375,6 +375,7 @@ export interface MindMapNode {
   id: string;
   parentId?: string;
   text: string;
+  summary?: string;
   note?: string;
   color?: string;
   collapsed?: boolean;

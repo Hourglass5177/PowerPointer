@@ -56,6 +56,7 @@ export function exportMindMapMarkdown(map: MindMap) {
     if (!node) return;
     const indent = "  ".repeat(depth);
     output.push(`${indent}- ${node.text.replaceAll("\n", " ")}`);
+    if (node.summary) output.push(`${indent}  知识简介：${node.summary.replaceAll("\n", `\n${indent}  `)}`);
     if (node.note) output.push(`${indent}  ${node.note.replaceAll("\n", `\n${indent}  `)}`);
     if (node.source) output.push(`${indent}  来源：${node.source.documentName || node.source.documentId} · 第 ${node.source.page} 页`);
     if (node.link) output.push(`${indent}  ${node.link}`);
