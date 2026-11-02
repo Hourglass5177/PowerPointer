@@ -66,6 +66,8 @@ export class Store {
         this.db.exec("PRAGMA user_version=4");
       });
     }
+    // Streaming re-reads a conversation many times a second; it must not parse every turn.
+    this.db.exec("CREATE INDEX IF NOT EXISTS turn_conversation ON records(json_extract(body,'$.conversationId')) WHERE kind='turn'");
   }
   all<T>(kind: string): T[] {
     return (
@@ -139,6 +141,13 @@ export class Store {
   }
   turn(id: string) {
     return this.get<Turn>("turn", id);
+  }
+  turnsOf(conversationId: string): Turn[] {
+    return (
+      this.db
+        .prepare("SELECT body FROM records WHERE kind='turn' AND json_extract(body,'$.conversationId')=? ORDER BY rowid")
+        .all(conversationId) as { body: string }[]
+    ).map((r) => JSON.parse(r.body));
   }
   pages(doc: string) {
     return this.db

@@ -230,6 +230,9 @@ input, textarea, select { border-color: #d4d8cf; background: var(--paper); }
 @media (max-width: 899px) {
   .reader-tools > details > .popover-panel { left: 0; right: auto; }
 }
+@media (max-width: 649px) {
+  .reading-window-switcher { z-index: 620; }
+}
 @media (max-width: 540px) {
   .workspace-tabs button { font-size: 13px; padding-inline: 8px; }
   .reader-tools { gap: 0; }

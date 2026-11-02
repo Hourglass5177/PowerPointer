@@ -61,6 +61,27 @@ test("解释窗工具检索创建时冻结的讨论，并可查阅用户附加�
   } finally { await f.close(); }
 });
 
+test("原生接口的工具过程显示中文名称和来源数量，不显示内部标识或原始结果", async () => {
+  const calls = [{ id: "c1", name: "read_web", arguments: {} }, { id: "c2", name: "external_abc", arguments: {} }, { id: "c3", name: "broken", arguments: {} }];
+  const s = await server((body, _q, res) => { if (body.messages.some((m: any) => m.role === "tool")) chat(res, "完成"); else chat(res, "", calls); });
+  const f = fixture(s.url);
+  try {
+    f.c.models[0].capabilities = { vision: false, tools: true, reasoning: false };
+    const broker = {
+      specs: calls.map(c => ({ name: c.name, description: "", inputSchema: {} })),
+      label: (name: string) => name === "read_web" ? "阅读网页" : name === "external_abc" ? "测试服务 · lookup" : "调用外部只读工具",
+      call: async (name: string) => { if (name === "broken") throw Error("工具失败原因"); return { text: "{\"secret\":\"原始结果\"}", sources: name === "read_web" ? [{ id: "a" }, { id: "b" }] as any : [] }; },
+    };
+    const worker = new AIRuntime(f.config).worker(f.c, {}, { connectionId: f.c.id, model: "fixture", textOnly: true, assistantSnapshot: f.config.assistant("explain") }, broker);
+    const seen = new Map<string, { title: string; detail: string; state: string }>();
+    await worker.run("t", "问题", [], e => { if (e.activity) seen.set(e.activity.id, e.activity as any); }, new AbortController().signal, { model: "fixture" });
+    assert.deepEqual([...seen.values()].map(a => [a.title, a.state, a.detail]), [["阅读网页", "completed", "返回 2 处来源"], ["测试服务 · lookup", "completed", "已完成"], ["调用外部只读工具", "failed", "工具失败原因"]]);
+    const tools = new ResearchTools(task(f), f.external, f.artifacts, () => {});
+    assert.equal(tools.label("search_course"), "检索课件");
+    tools.close();
+  } finally { await s.close(); await f.close(); }
+});
+
 test("生成中停止时返回中文说明，不暴露底层中止错误", async () => {
   let started!: () => void; const streaming = new Promise<void>(resolve => started = resolve);
   const s = await server((_b, _q, res) => { res.writeHead(200, { "Content-Type": "text/event-stream" }); res.write(`data: {"choices":[{"delta":{"content":"部分"}}]}\n\n`); started(); });
@@ -200,6 +221,18 @@ test("原生多轮保留推理签名、独立图像与并行工具结果，不�
       if (protocol === "gemini") { assert.equal(wire.generationConfig.thinkingConfig.thinkingLevel, "HIGH"); assert.notEqual(first.toolCalls[0].id, second.toolCalls[0].id); assert.equal(wire.contents[2].parts[0].functionResponse.name, "read"); }
     } finally { await s.close(); }
   }
+});
+
+test("连接设置的默认模型决定模型目录中的默认项", async () => {
+  const f = fixture();
+  try {
+    const m = f.c.models[0];
+    const c = { ...f.c, models: [m, { ...m, model: "second", displayName: "Second", isDefault: false }], defaultModel: "second" };
+    f.store.put("aiConnection", c);
+    assert.deepEqual((await f.config.models(c.id)).map(x => [x.model, x.isDefault]), [["fixture", false], ["second", true]]);
+    f.store.put("aiConnection", { ...c, defaultModel: undefined });
+    assert.deepEqual((await f.config.models(c.id)).map(x => [x.model, x.isDefault]), [["fixture", true], ["second", false]]);
+  } finally { await f.close(); }
 });
 
 test("模型以连接区分，未知图像能力不会自动降级或转向其他服务", async () => {

@@ -8,13 +8,15 @@ import { AIToolSettings } from "./AIToolSettings.tsx";
 
 const protocols = { codex: "Codex 订阅", openai: "OpenAI Responses", anthropic: "Anthropic Messages", gemini: "Gemini", compatible: "OpenAI 兼容" };
 export function AIConnectionCenter({ r, environment }: { r: Reader; environment?: React.ReactNode }) {
-  const [tab, setTab] = useState("connections"), [selected, setSelected] = useState("codex");
+  const [tab, setTab] = useState("connections"), [selected, setSelected] = useState("codex"), [notice, setNotice] = useState("");
   const config = r.ai.config;
+  // Selecting remounts the editor, so a result message has to survive the switch from here.
+  const select = (id: string, text = "") => { setSelected(id); setNotice(text); };
   return <div className="ai-center">
     <div className="ai-center-intro"><h2>AI 与研究设置</h2><p>选择适合当前问题的模型，把常用方法保存为助手。</p></div>
     <nav className="ai-center-tabs" aria-label="AI 设置分类">{[["connections", "模型连接"], ["assistants", "助手"], ["profiles", "常用配置"], ["memory", "学习背景"], ["usage", "用量"], ["tools", "工具扩展"], ["environment", "环境"]].map(([id, name]) => <button key={id} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>{name}</button>)}</nav>
     {!config ? <div className="ai-center-empty">{r.ai.error || "正在读取 AI 设置…"}<button onClick={() => void r.ai.refresh()}>重新加载</button></div> : <>
-      {tab === "connections" && <div className="ai-center-columns"><aside className="ai-connection-nav" aria-label="模型连接">{config.connections.map(c => <button key={c.id} aria-current={selected === c.id ? "true" : undefined} onClick={() => setSelected(c.id)}><strong>{c.name}</strong><small>{!c.enabled ? "已关闭" : c.protocol === "codex" ? "本机套餐" : c.status === "ready" ? "已连接" : c.status === "error" ? "连接需检查" : "尚未检查"}</small>{config.preferences.defaultConnectionId === c.id && <span className="ai-default-badge">默认</span>}</button>)}<button className="ai-add-connection" onClick={() => setSelected("new")}>＋ 添加连接</button></aside><ConnectionEditor key={selected} r={r} connection={config.connections.find(c => c.id === selected)} onSelected={setSelected} /></div>}
+      {tab === "connections" && <div className="ai-center-columns"><aside className="ai-connection-nav" aria-label="模型连接">{config.connections.map(c => <button key={c.id} aria-current={selected === c.id ? "true" : undefined} onClick={() => select(c.id)}><strong>{c.name}</strong><small>{!c.enabled ? "已关闭" : c.protocol === "codex" ? "本机套餐" : c.status === "ready" ? "已连接" : c.status === "error" ? "连接需检查" : "尚未检查"}</small>{config.preferences.defaultConnectionId === c.id && <span className="ai-default-badge">默认</span>}</button>)}<button className="ai-add-connection" onClick={() => select("new")}>＋ 添加连接</button></aside><ConnectionEditor key={selected} r={r} connection={config.connections.find(c => c.id === selected)} notice={notice} onSelected={select} /></div>}
       {tab === "assistants" && <AssistantEditor r={r} />}
       {tab === "profiles" && <ProfilesEditor r={r} />}
       {tab === "memory" && <MemoryEditor r={r} />}
@@ -24,9 +26,9 @@ export function AIConnectionCenter({ r, environment }: { r: Reader; environment?
     </>}
   </div>;
 }
-function ConnectionEditor({ r, connection, onSelected }: { r: Reader; connection?: AIConnection; onSelected: (id: string) => void }) {
+function ConnectionEditor({ r, connection, notice, onSelected }: { r: Reader; connection?: AIConnection; notice: string; onSelected: (id: string, text?: string) => void }) {
   const [draft, setDraft] = useState<AIConnection>(() => connection ? structuredClone(connection) : { id: "", name: "OpenAI", protocol: "openai", preset: "openai", baseUrl: "https://api.openai.com/v1", enabled: true, models: [], createdAt: "", updatedAt: "" });
-  const [key, setKey] = useState(""), [clearKey, setClearKey] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState(""), [status, setStatus] = useState<ConnectionStatus>(), [newModel, setNewModel] = useState(""), [filter, setFilter] = useState("");
+  const [key, setKey] = useState(""), [clearKey, setClearKey] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState(notice), [error, setError] = useState(""), [status, setStatus] = useState<ConnectionStatus>(), [newModel, setNewModel] = useState(""), [filter, setFilter] = useState("");
   const codex = draft.protocol === "codex";
   useEffect(() => { if (connection?.id === "codex") { let stale = false; api<ConnectionStatus>("/ai/connections/codex/check", { method: "POST", body: "{}" }).then(value => { if (!stale) setStatus(value); }).catch(e => { if (!stale) setError(e.message); }); return () => { stale = true; }; } }, []);
   const patch = (v: Partial<AIConnection>) => setDraft(old => ({ ...old, ...v }));
@@ -39,8 +41,9 @@ function ConnectionEditor({ r, connection, onSelected }: { r: Reader; connection
     const c = await save();
     const result = await api<ConnectionStatus & { models?: AIModel[] }>(`/ai/connections/${c.id}/check`, { method: "POST", body: JSON.stringify({ model: test ? c.defaultModel || c.models[0]?.model : undefined }) });
     setStatus(result); if (result.models) patch({ models: result.models });
-    setMessage(test ? "模型已返回实际回答，连接可用。" : codex ? result.authenticated ? "已读取本机 Codex 登录状态。" : "请完成官方登录。" : "已获取模型列表。请确认各模型的图像与工具能力。" );
-    await r.ai.refresh(); await r.loadModels(); if (!connection) onSelected(c.id);
+    const text = test ? "模型已返回实际回答，连接可用。" : codex ? result.authenticated ? "已读取本机 Codex 登录状态。" : "请完成官方登录。" : "已获取模型列表。请确认各模型的图像与工具能力。";
+    setMessage(text);
+    await r.ai.refresh(); await r.loadModels(); if (!connection) onSelected(c.id, text);
   });
   const updateModel = (id: string, values: Partial<AIModel>) => patch({ models: draft.models.map(m => m.model === id ? { ...m, ...values } : m) });
   const preset = connectionPresets.find(p => p.id === draft.preset);
@@ -56,7 +59,7 @@ function ConnectionEditor({ r, connection, onSelected }: { r: Reader; connection
       <details className="ai-advanced"><summary>接口设置</summary><label className="ai-field">协议<select value={draft.protocol} onChange={e => patch({ protocol: e.target.value as AIConnection["protocol"] })}>{Object.entries(protocols).filter(([id]) => id !== "codex").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><p className="muted">地址填写到 API 根路径，应用按协议补上接口路径。</p></details>
     </>}
     {error && <p role="alert" className="turn-error">{error}</p>}{message && <p role="status" className="ai-success">{message}</p>}
-    <div className="ai-actions"><button className="primary" disabled={busy || !draft.name.trim()} onClick={() => void action(async () => { const c = await save(); setMessage("配置已保存"); if (!connection) onSelected(c.id); })}>{busy ? "处理中…" : "保存连接"}</button><button disabled={busy} onClick={() => void check()}>{codex ? "检查登录与额度" : "保存并获取模型"}</button>{!codex && <button disabled={busy || !draft.models.length} onClick={() => void check(true)}>测试默认模型</button>}</div>
+    <div className="ai-actions"><button className="primary" disabled={busy || !draft.name.trim()} onClick={() => void action(async () => { const c = await save(); setMessage("配置已保存"); if (!connection) onSelected(c.id, "配置已保存"); })}>{busy ? "处理中…" : "保存连接"}</button><button disabled={busy} onClick={() => void check()}>{codex ? "检查登录与额度" : "保存并获取模型"}</button>{!codex && <button disabled={busy || !draft.models.length} onClick={() => void check(true)}>测试默认模型</button>}</div>
     <div className="ai-model-editor"><div className="ai-section-heading"><h3>模型</h3>{connection && <button disabled={busy || r.ai.config?.preferences.defaultConnectionId === connection.id} onClick={() => void action(async () => { await r.ai.savePreferences({ defaultConnectionId: connection.id }); setMessage("已设为默认连接"); })}>{r.ai.config?.preferences.defaultConnectionId === connection.id ? "默认连接" : "设为默认连接"}</button>}</div>
       {codex ? <div className="ai-catalog-list">{r.models.filter(m => m.connectionId === "codex").map(m => <div key={m.model}><label className="ai-field">{m.model}<input aria-label={`显示名称 ${m.model}`} defaultValue={r.ai.config?.preferences.names[`codex::${m.model}`] || m.displayName} onBlur={e => void r.ai.savePreferences({ names: { ...r.ai.config!.preferences.names, [`codex::${m.model}`]: e.target.value.trim() || m.displayName } }).catch(e => setError(e.message))} /></label><span>{m.inputModalities?.includes("image") ? "文字 · 图像" : "文字"}</span></div>)}</div> : <>
         <p className="muted">目录未提供能力时需手动确认。仅开启服务实际支持的能力。</p>

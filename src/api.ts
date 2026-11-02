@@ -16,6 +16,11 @@ export async function api<T = any>(
       "X-Lecture-Token": csrf,
       ...options.headers,
     },
+  }).catch((e: unknown) => {
+    // fetch reports an unreachable server only as a TypeError with an English message.
+    if (e instanceof TypeError)
+      throw Error("无法连接本地服务，请确认启动窗口仍在运行后重试");
+    throw e;
   });
   if (!r.ok) {
     let message = "请求失败";

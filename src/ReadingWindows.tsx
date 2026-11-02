@@ -32,7 +32,7 @@ function Window({
 }) {
   const [layout, setLayout] = useState(s.layout),
     [draft, setDraft] = useState(s.draft),
-    [options, setOptions] = useState(false),
+    [options, setOptions] = useState(() => w.reviewing.current.has(s.id)),
     [sending, setSending] = useState(false),
     [notice, setNotice] = useState("");
   const drag = useRef<{
@@ -708,7 +708,7 @@ export function ReadingWindows({
           narrow={viewport < 650}
         />
       ))}
-      {!!w.sessions.length && (
+      {(w.sessions.length > 1 || w.sessions.some((s) => s.layout.minimized)) && (
         <details className="reading-window-switcher" aria-label="打开的解释窗">
           <summary>解释窗 {w.sessions.length}</summary>
           <nav aria-label="解释窗列表">

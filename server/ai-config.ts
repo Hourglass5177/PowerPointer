@@ -42,7 +42,7 @@ export class AIConfig {
     const result = await Promise.all(list.map(async c => {
       let models = c.models;
       if (c.protocol === "codex") { try { models = await this.codex.models(); } catch { models = []; } }
-      return models.map(m => ({ ...m, connectionId: c.id, connectionName: c.name, capabilities: m.capabilities || { vision: m.inputModalities?.includes("image") ?? "unknown", tools: c.protocol === "codex" ? true : "unknown", reasoning: m.supportedReasoningEfforts.length > 0 }, favorite: this.preferences().favorites.includes(modelKey(c.id, m.model)) }));
+      return models.map(m => ({ ...m, isDefault: c.defaultModel ? m.model === c.defaultModel : m.isDefault, connectionId: c.id, connectionName: c.name, capabilities: m.capabilities || { vision: m.inputModalities?.includes("image") ?? "unknown", tools: c.protocol === "codex" ? true : "unknown", reasoning: m.supportedReasoningEfforts.length > 0 }, favorite: this.preferences().favorites.includes(modelKey(c.id, m.model)) }));
     }));
     return result.flat();
   }

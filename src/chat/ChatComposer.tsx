@@ -9,8 +9,8 @@ import type { Reader } from "../useReader.ts";
 import { api, renderUrl } from "../api.ts";
 import { Icon } from "../controls.tsx";
 import type { AnswerLength, Scope } from "../../shared/types.ts";
-import { ModelList, AssistantSelect, selectedModel, ProfileButtons } from "../AIControls.tsx";
-import { defaultEffort, modelEfforts } from "../../shared/ai.ts";
+import { ModelList, AssistantSelect, ProfileButtons } from "../AIControls.tsx";
+import { currentModel, defaultEffort, modelEfforts } from "../../shared/ai.ts";
 import { applyChatFont, chatFontSizes, readChatFont, saveChatFont, type ChatFont } from "../chatFont.ts";
 
 const scopeInfo = {
@@ -110,7 +110,7 @@ export function ChatComposer({ r }: { r: Reader }) {
     draft = r.draft;
   const models = r.models;
   const modelValue = { ...data, connectionId: data.connectionId || r.conversation?.connectionId || r.ai.config?.preferences.defaultConnectionId, model: data.model || (!data.connectionId || data.connectionId === r.conversation?.connectionId ? r.conversation?.model : undefined) };
-  const selected = selectedModel(models, modelValue, r.ai.config?.preferences.defaultConnectionId);
+  const selected = currentModel(models, data, r.conversation, r.ai.config?.preferences.defaultConnectionId);
   const effort = data.reasoningEffort || defaultEffort(selected);
   const openMenu = (name: string) =>
     setMenu((old) => (old === name ? "" : name));

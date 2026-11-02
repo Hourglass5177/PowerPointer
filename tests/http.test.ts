@@ -118,6 +118,20 @@ test("本地接口：导入、去重、索引、页面图、跨站/越界/跨文
       (await get("/api/attachments/..%2F..%2Flocal-settings.json")).status,
       400,
     );
+    const invalid = async (r: Response, status: number, text: RegExp) => {
+      assert.equal(r.status, status);
+      const body = (await r.json()) as { error: string };
+      assert.match(body.error, text);
+      assert.doesNotMatch(body.error, /ENOENT|Unexpected|[A-Z]:\\|lecture-http/);
+    };
+    await invalid(await get("/api/attachments/00000000-0000-4000-8000-000000000000-0.png"), 404, /文件不存在/);
+    await invalid(await get(`/api/documents/${one.id}/render?page=1&rect=notjson`), 400, /请求参数无效/);
+    await invalid(await get("/api/no-such-route"), 404, /接口不存在/);
+    await invalid(await fetch(origin + "/api/notes", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{bad" }), 400, /请求参数无效/);
+    await invalid(await fetch(origin + `/api/documents/${one.id}`, { method: "PATCH", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ page: 1, rotation: 45, zoom: 1 }) }), 400, /请求参数无效/);
+    const oversized = new FormData();
+    oversized.append("file", new Blob([new Uint8Array(100 * 1024 * 1024 + 1)]), "big.pdf");
+    await invalid(await fetch(origin + "/api/imports", { method: "POST", headers, body: oversized }), 400, /100 MB/);
     assert.equal(
       (await get(`/api/documents/${one.id}/render?page=9999`)).status,
       400,
